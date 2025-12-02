@@ -1,0 +1,66 @@
+# This .pre-commit-config.yaml is part of the shared action.
+# It will be used by the consumer repository.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+  - repo: https://github.com/google/yamlfmt
+    rev: v0.20.0
+    hooks:
+      - id: yamlfmt
+        args: ["-formatter", "type=basic,retain_line_breaks_single=true"]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.5
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+  - repo: https://github.com/ComPWA/taplo-pre-commit
+    rev: v0.9.3
+    hooks:
+      - id: taplo-format
+      - id: taplo-lint
+  - repo: local
+    hooks:
+      - id: cargo-fmt-long-lines
+        name: Rust Format - Check for long lines and unformatted code
+        description: >
+          Verifies Rust code formatting for line length and general formatting
+          issues (only if Cargo.toml exists). Uses shared rustfmt.toml.
+        entry: |
+          bash -c '[ -f Cargo.toml ] && \
+            cargo fmt -- --check --config \
+            error_on_unformatted=true,error_on_line_overflow=true,format_strings=true || \
+            exit 0'
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-fmt-import-order
+        name: Rust Format - Check import order
+        description: >
+          Verifies Rust import order according to StdExternalCrate grouping
+          (only if Cargo.toml exists). Uses shared rustfmt.toml.
+        entry: |
+          bash -c '[ -f Cargo.toml ] && \
+            cargo fmt -- --check --config group_imports=StdExternalCrate || \
+            exit 0'
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-fmt-imports-granularity
+        name: Rust Format - Check imports granularity
+        description: >
+          Verifies Rust import granularity according to Crate setting
+          (only if Cargo.toml exists). Uses shared rustfmt.toml.
+        entry: |
+          bash -c '[ -f Cargo.toml ] && \
+            cargo fmt -- --check --config imports_granularity=Crate || \
+            exit 0'
+        language: system
+        types: [rust]
+        pass_filenames: false

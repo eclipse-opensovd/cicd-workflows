@@ -1,0 +1,54 @@
+name: 'OpenSOVD Pre-Commit Checks'
+description: 'Runs pre-commit hooks with a standardized configuration from this action.'
+
+inputs:
+  python-version:
+    description: 'Python version to use for pre-commit environment'
+    required: false
+    default: '3.13'
+  pre-commit-version:
+    description: 'Version of pre-commit to install'
+    required: false
+    default: '4.2'
+  config-path:
+    description: >
+      Path to a custom .pre-commit-config.yaml in the consumer repository.
+      If not provided, the action uses its own config.
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout consumer repository
+      uses: actions/checkout@v4
+      # This checks out the repository where the workflow is running
+      # into the default GITHUB_WORKSPACE directory.
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        python-version: ${{ inputs.python-version }}
+        activate-environment: true
+
+    - name: Determine pre-commit config path
+      id: set_config_path
+      shell: bash
+      run: |
+        if [[ -n "${{ inputs.config-path }}" ]]; then
+          echo "PRE_COMMIT_CONFIG_FILE=${{ inputs.config-path }}" \
+            >> "$GITHUB_OUTPUT"
+        else
+          # GITHUB_ACTION_PATH points to the directory containing this action.yml
+          # So, ./.pre-commit-config.yaml is relative to this action's directory.
+          echo "PRE_COMMIT_CONFIG_FILE=${GITHUB_ACTION_PATH}/.pre-commit-config.yaml" \
+            >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Run pre-commit
+      shell: bash
+      # RUSTFMT_CONFIG_PATH environment variable is no longer set by the action.
+      # cargo fmt will automatically look for a local rustfmt.toml.
+      run: uv tool run pre-commit@${{ inputs.pre-commit-version }} run \
+        --all-files --config "${{ steps.set_config_path.outputs.PRE_COMMIT_CONFIG_FILE }}"

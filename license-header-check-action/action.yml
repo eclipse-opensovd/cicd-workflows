@@ -1,0 +1,33 @@
+name: 'Shared License Header Check'
+description: 'Checks for correct license headers using .licenserc.yaml configuration.'
+
+inputs:
+  config-path:
+    description: 'Path to a custom .licenserc.yaml in the consumer repository. If not provided, the action uses its own config.'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout consumer repository
+      uses: actions/checkout@v4
+      # This checks out the repository where the workflow is running
+      # into the default GITHUB_WORKSPACE directory.
+
+    - name: Determine license config path
+      id: set_config_path
+      shell: bash
+      run: |
+        if [[ -n "${{ inputs.config-path }}" ]]; then
+          echo "LICENSE_CONFIG_FILE=${{ inputs.config-path }}" >> "$GITHUB_OUTPUT"
+        else
+          # GITHUB_ACTION_PATH points to the directory containing this action.yml
+          # So, ./.licenserc.yaml is relative to this action's directory.
+          echo "LICENSE_CONFIG_FILE=${GITHUB_ACTION_PATH}/.licenserc.yaml" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Check License Headers
+      uses: apache/skywalking-eyes/header@v0.7.0
+      with:
+        config: ${{ steps.set_config_path.outputs.LICENSE_CONFIG_FILE }}
