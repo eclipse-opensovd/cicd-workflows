@@ -1,0 +1,60 @@
+# Copyright (c) 2025 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+  - repo: https://github.com/google/yamlfmt
+    rev: v0.20.0
+    hooks:
+      - id: yamlfmt
+        args: ["-formatter", "type=basic,retain_line_breaks_single=true"]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.5
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+  - repo: https://github.com/ComPWA/taplo-pre-commit
+    rev: v0.9.3
+    hooks:
+      - id: taplo-format
+      - id: taplo-lint
+  - repo: local
+    hooks:
+      - id: license-eye-fix
+        name: Fix License Headers (SkyWalking Eyes)
+        entry: bash -c 'license-eye -c "${LICENSE_EYE_CONFIG:-.licenserc.yml}" header fix'
+        language: system
+        pass_filenames: false
+      - id: cargo-fmt-long-lines
+        name: Rust Format - Fix long lines and unformatted code
+        entry: bash -c '[ -f Cargo.toml ] && cargo fmt -- --config error_on_unformatted=true,error_on_line_overflow=true,format_strings=true || exit 0'
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-fmt-import-order
+        name: Rust Format - Fix import order
+        entry: bash -c '[ -f Cargo.toml ] && cargo fmt -- --config group_imports=StdExternalCrate || exit 0'
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-fmt-imports-granularity
+        name: Rust Format - Fix imports granularity
+        entry: bash -c '[ -f Cargo.toml ] && cargo fmt -- --config imports_granularity=Crate || exit 0'
+        language: system
+        types: [rust]
+        pass_filenames: false
