@@ -1,0 +1,113 @@
+# Copyright (c) 2025 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'OpenSOVD Pre-Commit Checks'
+description: 'Runs pre-commit hooks with a standardized configuration from this action.'
+
+inputs:
+  rust-nightly-version:
+    description: 'Rust nightly version to use (YYYY-MM-DD), defaults to 2025-07-14 if not set'
+    required: false
+    default: '2025-07-14'
+  python-version:
+    description: 'Python version to use for pre-commit environment'
+    required: false
+    default: '3.13'
+  pre-commit-version:
+    description: 'Version of pre-commit to install'
+    required: false
+    default: '4.2'
+  config-path:
+    description: >
+      Path to a custom .pre-commit-config.yml in the consumer repository. If not provided, the action uses its own config.
+    required: false
+    default: ''
+  license-config-path:
+    description: >
+      Path to a custom .licenserc.yml in the consumer repository. If not provided, the action uses its own config.
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout consumer repository
+      uses: actions/checkout@v4
+      with:
+        submodules: false
+
+    - name: Determine input values with defaults
+      id: inputs
+      shell: bash
+      run: |
+        # Rust nightly version
+        if [[ -n "${{ inputs.rust-nightly-version }}" ]]; then
+          echo "rust_toolchain=nightly-${{ inputs.rust-nightly-version }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "rust_toolchain=nightly-2025-07-14" >> "$GITHUB_OUTPUT"
+        fi
+
+        # Python version
+        if [[ -n "${{ inputs.python-version }}" ]]; then
+          echo "python_version=${{ inputs.python-version }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "python_version=3.13" >> "$GITHUB_OUTPUT"
+        fi
+
+        # Pre-commit version
+        if [[ -n "${{ inputs.pre-commit-version }}" ]]; then
+          echo "precommit_version=${{ inputs.pre-commit-version }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "precommit_version=4.2" >> "$GITHUB_OUTPUT"
+        fi
+
+        # Pre-commit config path
+        if [[ -n "${{ inputs.config-path }}" ]]; then
+          echo "config_path=${{ inputs.config-path }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "config_path=${GITHUB_ACTION_PATH}/.pre-commit-config.yml" >> "$GITHUB_OUTPUT"
+        fi
+
+        # License config path
+        if [[ -n "${{ inputs.license-config-path }}" ]]; then
+          if [[ -f "${{ inputs.license-config-path }}" ]]; then
+            echo "license_config_path=${{ inputs.license-config-path }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Error: Custom license config not found at ${{ inputs.license-config-path }}"
+            exit 1
+          fi
+        else
+          echo "license_config_path=${GITHUB_ACTION_PATH}/.licenserc.yml" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        toolchain: ${{ steps.inputs.outputs.rust_toolchain }}
+        components: clippy, rustfmt
+
+    - name: Check license headers
+      uses: apache/skywalking-eyes/header@v0.7.0
+      with:
+        config: ${{ steps.inputs.outputs.license_config_path }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        python-version: ${{ steps.inputs.outputs.python_version }}
+        activate-environment: true
+
+    - name: Run pre-commit
+      shell: bash
+      env:
+        LICENSE_EYE_CONFIG: ${{ steps.inputs.outputs.license_config_path }}
+      run: uv tool run pre-commit@${{ steps.inputs.outputs.precommit_version }} run --all-files --config "${{ steps.inputs.outputs.config_path }}"
