@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run checks
-        uses: eclipse-opensovd/cicd-workflows/pre-commit-action@init
+        uses: eclipse-opensovd/cicd-workflows/pre-commit-action@main
         with:
           rust-nightly-version: ${{ inputs.rust-nightly-version }}
           python-version: ${{ inputs.python-version }}
