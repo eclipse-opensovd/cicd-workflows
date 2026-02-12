@@ -1,3 +1,15 @@
+<!--
+SPDX-License-Identifier: Apache-2.0
+SPDX-FileCopyrightText: 2025 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+
+See the NOTICE file(s) distributed with this work for additional
+information regarding copyright ownership.
+
+This program and the accompanying materials are made available under the
+terms of the Apache License Version 2.0 which is available at
+https://www.apache.org/licenses/LICENSE-2.0
+-->
+
 # Reusable GitHub Actions Workflows
 
 This repository contains **reusable GitHub Actions workflows** and **composite actions** designed to standardize CI/CD processes across multiple repositories in the Eclipse OpenSOVD project.
@@ -33,18 +45,20 @@ jobs:
     with:
       rust-nightly-version: "2025-07-14"  # Optional, defaults to 2025-07-14
       python-version: "3.13"  # Optional, defaults to 3.13
-      pre-commit-version: "4.2"  # Optional, defaults to 4.2
       pre-commit-config-path: ""  # Optional, uses action's default config if not specified
-      license-config-path: ""  # Optional, uses action's default config if not specified
+      copyright-text: ""  # Optional, defaults to "The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"
+      license: ""  # Optional, defaults to "Apache-2.0"
+      reuse-template: ""  # Optional, defaults to "opensovd"
 ```
 
 #### Available Inputs
 
 - `rust-nightly-version` (optional): Rust nightly version to use for Rust formatting in the format `YYYY-MM-DD`. Defaults to `2025-07-14`.
 - `python-version` (optional): Python version to use for pre-commit environment. Defaults to `3.13`.
-- `pre-commit-version` (optional): Version of pre-commit to install. Defaults to `4.2`.
 - `pre-commit-config-path` (optional): Path to a custom `.pre-commit-config.yml` in your repository. If not provided, uses the action's default config.
-- `license-config-path` (optional): Path to a custom `.licenserc.yml` in your repository. If not provided, uses the action's default config.
+- `copyright-text` (optional): Copyright holder text for `reuse annotate` (e.g. `"ACME Inc."`). Defaults to `"The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"`.
+- `license` (optional): SPDX license identifier for `reuse annotate` (e.g. `"MIT"`). Defaults to `"Apache-2.0"`.
+- `reuse-template` (optional): Name of the Jinja2 template in `.reuse/templates/` (without `.jinja2` suffix). Consumer repos can provide their own template. Defaults to `"opensovd"`.
 
 ### Using Individual Actions
 
@@ -62,7 +76,6 @@ jobs:
       - uses: eclipse-opensovd/cicd-workflows/pre-commit-action@main
         with:
           python-version: "3.13"  # Optional, defaults to 3.13
-          pre-commit-version: "4.2"  # Optional, defaults to 4.2
           config-path: ""  # Optional, uses action's default config if not specified
 ```
 
@@ -95,10 +108,9 @@ All formatters **automatically fix issues** and **fail when changes are made**.
 - **Python**: `ruff check` for linting and code quality
 
 **License Headers (Auto-fix):**
-- **Apache SkyWalking Eyes**: Automatically adds or fixes license headers
-- Runs twice for reliability:
-  1. As a pre-commit hook (uses `license-eye` CLI, requires local installation)
-  2. As a dedicated GitHub Action step (uses Docker, always available in CI)
+- **FSFE REUSE tool**: Automatically adds and validates license headers per the [REUSE Specification](https://reuse.software/)
+- `reuse lint` validates all files have proper SPDX headers
+- `reuse annotate` auto-adds headers to new files with the current year
 
 **How Auto-fix Works:**
 When a formatter makes changes to your code, the pre-commit hook fails, requiring you to review and commit the changes. This ensures:
@@ -108,9 +120,10 @@ When a formatter makes changes to your code, the pre-commit hook fails, requirin
 
 **Inputs:**
 - `python-version`: Python version for pre-commit environment (default: `3.13`)
-- `pre-commit-version`: Version of pre-commit to install (default: `4.2`)
 - `config-path`: Path to custom `.pre-commit-config.yml` (optional)
-- `license-config-path`: Path to custom `.licenserc.yml` (optional)
+- `copyright-text`: Copyright holder text for `reuse annotate` (default: `"The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"`)
+- `license`: SPDX license identifier for `reuse annotate` (default: `"Apache-2.0"`)
+- `reuse-template`: Name of Jinja2 template in `.reuse/templates/` (default: `"opensovd"`)
 
 
 ## Running Checks Locally
@@ -120,6 +133,8 @@ When a formatter makes changes to your code, the pre-commit hook fails, requirin
 [uv](https://docs.astral.sh/uv/) is a fast Python package manager that can run Python scripts without needing to install dependencies globally.
 
 #### In This Repository
+
+
 
 To run pre-commit checks locally in this repository:
 
@@ -131,24 +146,27 @@ uv tool run pre-commit@4.2 run --all-files --config pre-commit-action/.pre-commi
 
 You have two options to run the same checks locally that run in CI:
 
-**Option 1: Using the `run_checks.py` script (One-off execution)**
+##### Option 1: Using the `run_checks.py` script (One-off execution)
 
 ```bash
 # Run with the default 'main' branch config
 uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py
+```
 
-# Or specify a different branch/tag/commit
+###### Specify a different branch/tag/commit
+```bash
 uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py your-branch-name
 ```
 
-This script will:
-1. Download the shared pre-commit configuration from this repository
-2. Download the shared license configuration (`.licenserc.yml`)
-3. Set up the environment to run all checks (including license header validation)
-4. Run all pre-commit checks against your code
-5. Clean up temporary files automatically
+###### Custom copyright and license
+```bash
+uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py --copyright="ACME Inc." --license=MIT --template=mytemplate
+```
 
-**Option 2: Using pre-commit directly (Recommended for development)**
+The script automatically fixes ruff lint violations and applies ruff formatting. In CI, issues are only reported without auto-fix.
+
+
+#### Option 2: Using pre-commit directly (Recommended for development)
 
 Create a `.pre-commit-config.yaml` file in your repository root:
 
@@ -192,9 +210,9 @@ pre-commit run shared-checks --all-files
 
 [Install uv](https://docs.astral.sh/uv/getting-started/installation/) - Fast Python package manager and script runner.
 
-#### Apache SkyWalking Eyes (Required for License Checks)
+#### FSFE REUSE tool (Required for License Checks)
 
-[Install SkyWalking Eyes](https://github.com/apache/skywalking-eyes#installation) - Required for local license header validation.
+[Install reuse](https://reuse.readthedocs.io/en/stable/readme.html) - Required for local license header validation. Install via `pip install reuse`.
 
 #### Rust Toolchain (Required for Rust Projects)
 

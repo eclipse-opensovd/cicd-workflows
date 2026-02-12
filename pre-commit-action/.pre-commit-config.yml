@@ -1,4 +1,5 @@
-# Copyright (c) 2025 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -6,8 +7,6 @@
 # This program and the accompanying materials are made available under the
 # terms of the Apache License Version 2.0 which is available at
 # https://www.apache.org/licenses/LICENSE-2.0
-#
-# SPDX-License-Identifier: Apache-2.0
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -35,13 +34,18 @@ repos:
     hooks:
       - id: taplo-format
       - id: taplo-lint
+  - repo: https://github.com/fsfe/reuse-tool
+    rev: v6.2.0
+    hooks:
+      - id: reuse
   - repo: local
     hooks:
-      - id: license-eye-fix
-        name: Fix License Headers (SkyWalking Eyes)
-        entry: bash -c 'license-eye -c "${LICENSE_EYE_CONFIG:-.licenserc.yml}" header fix'
+      - id: reuse-annotate
+        name: Add missing license headers (REUSE)
+        entry: bash reuse-annotate-hook.sh
         language: system
-        pass_filenames: false
+        pass_filenames: true
+        exclude: ^(LICENSE|NOTICE|CONTRIBUTORS)$
       - id: cargo-fmt-long-lines
         name: Rust Format - Fix long lines and unformatted code
         entry: bash -c '[ -f Cargo.toml ] && cargo fmt -- --config error_on_unformatted=true,error_on_line_overflow=true,format_strings=true || exit 0'
