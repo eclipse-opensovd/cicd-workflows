@@ -39,9 +39,11 @@ on:
     branches: [main]
   pull_request:
 
+
 jobs:
   checks:
-    uses: eclipse-opensovd/cicd-workflows/.github/workflows/checks.yml@main
+    # Alternative to a branch a SHA can (and should) be used
+    uses: eclipse-opensovd/.github/workflows/pre-commit/action.yml@main
     with:
       rust-nightly-version: "2025-07-14"  # Optional, defaults to 2025-07-14
       python-version: "3.13"  # Optional, defaults to 3.13

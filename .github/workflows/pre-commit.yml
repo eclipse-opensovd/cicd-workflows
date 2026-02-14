@@ -8,58 +8,67 @@
 # terms of the Apache License Version 2.0 which is available at
 # https://www.apache.org/licenses/LICENSE-2.0
 
-name: CI Checks
+name: 'OpenSOVD Pre-Commit Checks'
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-  workflow_dispatch:
   workflow_call:
     inputs:
       rust-nightly-version:
         description: 'Rust nightly version to use (YYYY-MM-DD), defaults to 2025-07-14 if not set'
         required: false
         type: string
+        default: '2025-07-14'
       python-version:
         description: 'Python version to use for pre-commit environment'
         required: false
         type: string
-      pre-commit-config-path:
-        description: 'Path to a custom .pre-commit-config.yml in the consumer repository'
+        default: '3.13'
+      config-path:
+        description: >
+          Path to a custom .pre-commit-config.yml in the consumer repository. If not provided, the action uses its own config.
         required: false
         type: string
+        default: ''
       copyright-text:
-        description: 'Copyright holder text for reuse annotate, defaults to "The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"'
+        description: >
+          Copyright holder text used by reuse annotate for new files. Defaults to "The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)".
         required: false
         type: string
+        default: 'The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)'
       license:
-        description: 'SPDX license identifier for reuse annotate (e.g. "Apache-2.0"), defaults to "Apache-2.0"'
+        description: >
+          SPDX license identifier used by reuse annotate for new files (e.g. "Apache-2.0"). Defaults to "Apache-2.0".
         required: false
         type: string
+        default: 'Apache-2.0'
       reuse-template:
-        description: 'Name of reuse Jinja2 template in .reuse/templates/ (without .jinja2 suffix), defaults to "opensovd"'
+        description: >
+          Name of the reuse Jinja2 template in .reuse/templates/ (without .jinja2 suffix). Consumer repos can provide their own template. Defaults to "opensovd".
         required: false
         type: string
-
-permissions:
-  contents: read
+        default: 'opensovd'
 
 jobs:
-  checks:
+  pre-commit-checks:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: false
-      - name: Run checks
-        uses: ./pre-commit-action
+
+      - name: Checkout ci/cd repository
+        uses: actions/checkout@v4
+        with:
+          repository: eclipse-opensovd/cicd-workflows
+          path: .cicd-workflows
+          submodules: false
+
+      - name: Run pre-commit action
+        uses: ./.cicd-workflows/pre-commit-action
         with:
           rust-nightly-version: ${{ inputs.rust-nightly-version }}
           python-version: ${{ inputs.python-version }}
-          config-path: ${{ inputs.pre-commit-config-path }}
+          config-path: ${{ inputs.config-path }}
           copyright-text: ${{ inputs.copyright-text }}
           license: ${{ inputs.license }}
           reuse-template: ${{ inputs.reuse-template }}
