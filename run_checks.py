@@ -34,6 +34,7 @@ CONFIG_URL_TEMPLATE = f"{REPO_BASE_URL}/pre-commit-action/.pre-commit-config.yml
 HOOK_SCRIPT_URL_TEMPLATE = f"{REPO_BASE_URL}/pre-commit-action/reuse-annotate-hook.sh"
 TEMPLATE_URL_TEMPLATE = f"{REPO_BASE_URL}/.reuse/templates/{{template}}.jinja2"
 LICENSE_URL_TEMPLATE = f"{REPO_BASE_URL}/LICENSES/{{license}}.txt"
+REUSE_TOML_URL_TEMPLATE = f"{REPO_BASE_URL}/REUSE.toml"
 
 
 def patch_config(config_content, *, fix_mode):
@@ -235,6 +236,7 @@ def main():
             license_id=args.license,
             template=args.template,
         )
+
         hook_cwd_path.write_text(patched)
 
         # Clean up if we created the file (downloaded or copied from elsewhere)
@@ -242,6 +244,15 @@ def main():
             cleanup_list.append({"file": hook_cwd_path, "dirs": []})
 
         # Ensure REUSE assets are available locally
+        reuse_toml_url = REUSE_TOML_URL_TEMPLATE.format(branch=branch)
+        cleanup_list.append(
+            download_if_missing(
+                "REUSE.toml",
+                reuse_toml_url,
+                "REUSE.toml",
+            )
+        )
+
         template_url = TEMPLATE_URL_TEMPLATE.format(
             branch=branch, template=args.template
         )
