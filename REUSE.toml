@@ -11,15 +11,6 @@
 version = 1
 
 [[annotations]]
-path = [
-  "LICENSE",
-  "NOTICE",
-  "CONTRIBUTORS",
-  "**.md",
-  ".gitignore",
-  "REUSE.toml",
-  ".reuse/templates/**.jinja2",
-  "LICENSES/**.txt",
-]
+path = ["LICENSE", "NOTICE", "CONTRIBUTORS", "LICENSES/**.txt"]
 SPDX-FileCopyrightText = "The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"
 SPDX-License-Identifier = "Apache-2.0"

@@ -73,10 +73,10 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-      - uses: eclipse-opensovd/cicd-workflows/pre-commit-action@main
-        with:
-          python-version: "3.13"  # Optional, defaults to 3.13
-          config-path: ""  # Optional, uses action's default config if not specified
+      - name: Run checks
+        # Or use a long SHA instead of a branch (recommended)
+        uses: eclipse-opensovd/cicd-workflows/pre-commit-action@main
+
 ```
 
 ## Actions in This Repository
