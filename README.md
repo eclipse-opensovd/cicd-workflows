@@ -79,6 +79,35 @@ jobs:
           config-path: ""  # Optional, uses action's default config if not specified
 ```
 
+#### Rust Lint And Format Action
+```yaml
+
+# Make sure to copy this into you CI pipeline too, otherwise review comments cannot be posted.
+permissions:
+  contents: read
+  pull-requests: write # Grants permission to post review comments
+
+jobs:
+  format_and_clippy_nightly_toolchain_pinned:
+    concurrency:
+      group: format_and_clippy_nightly_toolchain_pinned-${{ github.ref }}
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Format and Clippy
+        uses: eclipse-opensovd/cicd-workflows/.github/workflows/checks.yml@main
+        with:
+          toolchain: nightly-2025-07-14
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fail-on-format-error: 'true'
+          fail-on-clippy-error: 'true'
+          clippy-deny-warnings: 'true'
+```
+
 ## Actions in This Repository
 
 ### Pre-commit Action (`pre-commit-action/`)
