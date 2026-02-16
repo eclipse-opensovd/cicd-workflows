@@ -14,13 +14,13 @@
 # dependencies = ["pre-commit==4.2"]
 # ///
 
+import argparse
 import subprocess
 import sys
 import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
-import argparse
 
 # Default to 'main' branch, but can be overridden via environment variable or argument
 DEFAULT_BRANCH = "main"
@@ -31,10 +31,11 @@ REPO_BASE_URL = (
     "https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/{branch}"
 )
 CONFIG_URL_TEMPLATE = f"{REPO_BASE_URL}/pre-commit-action/.pre-commit-config.yml"
-HOOK_SCRIPT_URL_TEMPLATE = f"{REPO_BASE_URL}/pre-commit-action/reuse-annotate-hook.sh"
+HOOK_SCRIPT_URL_TEMPLATE = f"{REPO_BASE_URL}/pre-commit-action/reuse-annotate-hook.py"
 TEMPLATE_URL_TEMPLATE = f"{REPO_BASE_URL}/.reuse/templates/{{template}}.jinja2"
 LICENSE_URL_TEMPLATE = f"{REPO_BASE_URL}/LICENSES/{{license}}.txt"
 REUSE_TOML_URL_TEMPLATE = f"{REPO_BASE_URL}/REUSE.toml"
+STYLES_URL_TEMPLATE = f"{REPO_BASE_URL}/.reuse/styles.toml"
 
 
 def patch_config(config_content, *, fix_mode):
@@ -61,20 +62,20 @@ def patch_config(config_content, *, fix_mode):
 def patch_hook_script(script_content, *, copyright_text, license_id, template):
     """Patch the reuse-annotate hook script with configured values.
 
-    Replaces the env var defaults so the script uses the provided values
-    directly, without depending on environment variables at runtime.
+    Replaces the Python default constants so the script uses the provided
+    values directly, without depending on environment variables at runtime.
     """
     script_content = script_content.replace(
-        "${REUSE_COPYRIGHT:-The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)}",
-        copyright_text,
+        'DEFAULT_COPYRIGHT = "The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"',
+        f'DEFAULT_COPYRIGHT = "{copyright_text}"',
     )
     script_content = script_content.replace(
-        "${REUSE_LICENSE:-Apache-2.0}",
-        license_id,
+        'DEFAULT_LICENSE = "Apache-2.0"',
+        f'DEFAULT_LICENSE = "{license_id}"',
     )
     script_content = script_content.replace(
-        "${REUSE_TEMPLATE:-opensovd}",
-        template,
+        'DEFAULT_TEMPLATE = "opensovd"',
+        f'DEFAULT_TEMPLATE = "{template}"',
     )
     return script_content
 
@@ -160,7 +161,7 @@ def main():
     parser.add_argument(
         "--hook-script",
         default=None,
-        help="Path to a local reuse-annotate-hook.sh (skips downloading from remote)",
+        help="Path to a local reuse-annotate-hook.py (skips downloading from remote)",
     )
     parser.add_argument(
         "--no-fix",
@@ -211,9 +212,9 @@ def main():
             config_is_temp = True
 
         # Resolve hook script: use local (--hook-script), CWD, or download.
-        # The script must end up at ./reuse-annotate-hook.sh (CWD) because
-        # the pre-commit config entry is: bash reuse-annotate-hook.sh
-        hook_cwd_path = Path("reuse-annotate-hook.sh")
+        # The script must end up at ./reuse-annotate-hook.py (CWD) because
+        # the pre-commit config entry is: python3 reuse-annotate-hook.py
+        hook_cwd_path = Path("reuse-annotate-hook.py")
         hook_existed_in_cwd = hook_cwd_path.exists()
 
         if args.hook_script:
@@ -229,7 +230,7 @@ def main():
             with urllib.request.urlopen(hook_url) as response:
                 script_content = response.read().decode()
 
-        # Patch env var defaults with configured values and write to CWD
+        # Patch default constants with configured values and write to CWD
         patched = patch_hook_script(
             script_content,
             copyright_text=args.copyright,
@@ -270,6 +271,15 @@ def main():
                 f"LICENSES/{args.license}.txt",
                 license_url,
                 f"license text '{args.license}'",
+            )
+        )
+
+        styles_url = STYLES_URL_TEMPLATE.format(branch=branch)
+        cleanup_list.append(
+            download_if_missing(
+                ".reuse/styles.toml",
+                styles_url,
+                "reuse comment styles config",
             )
         )
 

@@ -96,7 +96,7 @@ runs:
       run: |
         uv run "${GITHUB_ACTION_PATH}/../run_checks.py" --no-fix \
           ${{ steps.inputs.outputs.config_flag }} \
-          --hook-script="${GITHUB_ACTION_PATH}/reuse-annotate-hook.sh" \
+          --hook-script="${GITHUB_ACTION_PATH}/reuse-annotate-hook.py" \
           --copyright="${{ inputs.copyright-text }}" \
           --license="${{ inputs.license }}" \
           --template="${{ inputs.reuse-template }}"

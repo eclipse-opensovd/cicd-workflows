@@ -42,7 +42,7 @@ repos:
     hooks:
       - id: reuse-annotate
         name: Add missing license headers (REUSE)
-        entry: bash reuse-annotate-hook.sh
+        entry: uv run reuse-annotate-hook.py
         language: system
         pass_filenames: true
         exclude: ^(LICENSE|NOTICE|CONTRIBUTORS)$
