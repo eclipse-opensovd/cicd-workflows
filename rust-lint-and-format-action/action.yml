@@ -30,12 +30,16 @@ inputs:
     description: 'Whether to deny warnings in clippy (add -D warnings flag)'
     required: false
     default: 'true'
+  clippy-features:
+    description: 'Additional features to pass to clippy (e.g. "integration-tests")'
+    required: false
+    default: 'default'
 
 runs:
   using: 'composite'
   steps:
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ inputs.toolchain }}
         components: clippy, rustfmt
@@ -83,6 +87,6 @@ runs:
       with:
         reporter: 'github-pr-review'
         github_token: ${{ inputs.github-token }}
-        clippy_flags: --locked --all-targets --features integration-tests ${{ inputs.clippy-deny-warnings == 'true' && '-- -D warnings' || '' }}
+        clippy_flags: --locked --all-targets --features ${{ inputs.clippy-features }} ${{ inputs.clippy-deny-warnings == 'true' && '-- -D warnings' || '' }}
         filter_mode: 'nofilter'
         fail_on_error: ${{ inputs.fail-on-clippy-error }}

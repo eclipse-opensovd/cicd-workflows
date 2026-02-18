@@ -163,7 +163,7 @@ def main() -> int:
         # Fix wrong copyright lines
         fix_wrong_copyright(filepath, copyright_text)
 
-        # Run reuse annotate
+        # Run reuse annotate/lint
         cmd = [
             "reuse",
             "annotate",

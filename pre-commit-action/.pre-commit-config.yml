@@ -48,19 +48,25 @@ repos:
         exclude: ^(LICENSE|NOTICE|CONTRIBUTORS)$
       - id: cargo-fmt-long-lines
         name: Rust Format - Fix long lines and unformatted code
-        entry: bash -c '[ -f Cargo.toml ] && cargo fmt -- --config error_on_unformatted=true,error_on_line_overflow=true,format_strings=true || exit 0'
+        entry: bash -c '[ -f Cargo.toml ] && cargo fmt --check -- --config error_on_unformatted=true,error_on_line_overflow=true,format_strings=true || exit 0'
         language: system
         types: [rust]
         pass_filenames: false
       - id: cargo-fmt-import-order
         name: Rust Format - Fix import order
-        entry: bash -c '[ -f Cargo.toml ] && cargo fmt -- --config group_imports=StdExternalCrate || exit 0'
+        entry: bash -c '[ -f Cargo.toml ] && cargo fmt --check -- --config group_imports=StdExternalCrate || exit 0'
         language: system
         types: [rust]
         pass_filenames: false
       - id: cargo-fmt-imports-granularity
         name: Rust Format - Fix imports granularity
-        entry: bash -c '[ -f Cargo.toml ] && cargo fmt -- --config imports_granularity=Crate || exit 0'
+        entry: bash -c '[ -f Cargo.toml ] && cargo fmt --check -- --config imports_granularity=Crate || exit 0'
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: validate-cargo-lints
+        name: Validate Cargo Lints
+        entry: uv run shared-lints/check_cargo_lints.py Cargo.toml
         language: system
         types: [rust]
         pass_filenames: false

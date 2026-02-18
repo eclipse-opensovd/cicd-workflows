@@ -15,6 +15,7 @@
 # ///
 
 import argparse
+import os
 import subprocess
 import sys
 import tempfile
@@ -36,6 +37,10 @@ TEMPLATE_URL_TEMPLATE = f"{REPO_BASE_URL}/.reuse/templates/{{template}}.jinja2"
 LICENSE_URL_TEMPLATE = f"{REPO_BASE_URL}/LICENSES/{{license}}.txt"
 REUSE_TOML_URL_TEMPLATE = f"{REPO_BASE_URL}/REUSE.toml"
 STYLES_URL_TEMPLATE = f"{REPO_BASE_URL}/.reuse/styles.toml"
+CLIPPY_LINTS_URL_TEMPLATE = f"{REPO_BASE_URL}/shared-lints/shared-lints.toml"
+CLIPPY_LINTS_CHECK_SCRIPT_URL_TEMPLATE = (
+    f"{REPO_BASE_URL}/shared-lints/check_cargo_lints.py"
+)
 
 
 def patch_config(config_content, *, fix_mode):
@@ -55,11 +60,18 @@ def patch_config(config_content, *, fix_mode):
             "args: [--diff]",
             "args: []",
         )
+        # remove --check from cargo fmt entries so they format in place
+        config_content = config_content.replace(
+            "cargo fmt --check",
+            "cargo fmt",
+        )
 
     return config_content
 
 
-def patch_hook_script(script_content, *, copyright_text, license_id, template):
+def patch_hook_script(
+    script_content, *, copyright_text, license_id, template, fix_mode
+):
     """Patch the reuse-annotate hook script with configured values.
 
     Replaces the Python default constants so the script uses the provided
@@ -77,6 +89,7 @@ def patch_hook_script(script_content, *, copyright_text, license_id, template):
         'DEFAULT_TEMPLATE = "opensovd"',
         f'DEFAULT_TEMPLATE = "{template}"',
     )
+
     return script_content
 
 
@@ -236,6 +249,7 @@ def main():
             copyright_text=args.copyright,
             license_id=args.license,
             template=args.template,
+            fix_mode=fix_mode,
         )
 
         hook_cwd_path.write_text(patched)
@@ -283,10 +297,35 @@ def main():
             )
         )
 
+        clippy_lints_url = CLIPPY_LINTS_URL_TEMPLATE.format(branch=branch)
+        cleanup_list.append(
+            download_if_missing(
+                "shared-lints/shared-lints.toml",
+                clippy_lints_url,
+                "Clippy lints config",
+            )
+        )
+        clippy_lints_check_script_url = CLIPPY_LINTS_CHECK_SCRIPT_URL_TEMPLATE.format(
+            branch=branch
+        )
+        cleanup_list.append(
+            download_if_missing(
+                "shared-lints/check_cargo_lints.py",
+                clippy_lints_check_script_url,
+                "Clippy lints check script",
+            )
+        )
+
+        if not fix_mode:
+            env = {**os.environ, "SKIP": "reuse-annotate"}
+        else:
+            env = None
+
         print("Running pre-commit checks...")
         result = subprocess.run(
             ["pre-commit", "run", "--all-files", "--config", config_path],
             check=False,
+            env=env,
         )
 
         # Clean up
