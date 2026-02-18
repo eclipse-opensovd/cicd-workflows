@@ -114,6 +114,8 @@ jobs:
 
 Provides comprehensive code quality checks via uv and pre-commit.
 All formatters **automatically fix issues** and **fail when changes are made**.
+This action additionally verifies that the lints from [shared-lints](shared-lints/README.md)
+are applied in the Cargo.toml
 
 #### Checks Performed
 
@@ -140,6 +142,9 @@ All formatters **automatically fix issues** and **fail when changes are made**.
 - **FSFE REUSE tool**: Automatically adds and validates license headers per the [REUSE Specification](https://reuse.software/)
 - `reuse lint` validates all files have proper SPDX headers
 - `reuse annotate` auto-adds headers to new files with the current year
+
+**Lint verification:**
+- [check-cargo-lints](shared-lints/check_cargo_lints.py): checks that the Cargo.toml (workspace or package) has all lints specified according to [shared-lints.toml](shared-lints/shared-lints.toml)
 
 **How Auto-fix Works:**
 When a formatter makes changes to your code, the pre-commit hook fails, requiring you to review and commit the changes. This ensures:
