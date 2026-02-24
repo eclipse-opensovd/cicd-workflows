@@ -110,6 +110,34 @@ def _current_year() -> str:
     return str(datetime.now(tz=timezone.utc).year)
 
 
+def has_valid_spdx_header(filepath: str) -> bool:
+    """Check whether a file already has valid SPDX headers.
+
+    A file is considered to have a valid header if it contains at least one
+    SPDX-License-Identifier line AND at least one SPDX-FileCopyrightText line.
+    Such files should not be re-annotated to avoid overwriting a different but
+    perfectly valid license/copyright (e.g. a vendor file that is Apache-2.0
+    with a different copyright holder).
+
+    Also checks the .license sidecar file if it exists (e.g. for binary files
+    whose headers live in foo.bin.license).
+    """
+    paths_to_check = [Path(filepath)]
+    # If the file itself is not a .license sidecar, also check for one
+    if not filepath.endswith(".license"):
+        paths_to_check.append(Path(filepath + ".license"))
+
+    for path in paths_to_check:
+        try:
+            content = path.read_text(errors="replace")
+        except OSError:
+            continue
+        if "SPDX-License-Identifier" in content and "SPDX-FileCopyrightText" in content:
+            return True
+
+    return False
+
+
 def fix_wrong_copyright(filepath: str, copyright_text: str) -> None:
     """Remove SPDX-FileCopyrightText lines with wrong copyright text.
 
@@ -153,6 +181,16 @@ def main() -> int:
     styles = load_styles()
 
     for filepath in files:
+        # Never annotate license text files in the LICENSES/ directory
+        if filepath.startswith("LICENSES/") or "/LICENSES/" in filepath:
+            continue
+
+        # Skip files that already have valid SPDX headers.
+        # This avoids overwriting existing (possibly different but valid)
+        # license/copyright information with the template.
+        if has_valid_spdx_header(filepath):
+            continue
+
         # Resolve comment style
         style = resolve_style(filepath, styles)
         style_flag = [f"--style={style}"] if style else []
