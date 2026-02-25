@@ -69,13 +69,15 @@ runs:
           FAIL_LEVEL="none"
         fi
 
-        cargo fmt -- \
+        (cargo fmt -- \
           --emit=checkstyle \
           --config error_on_unformatted=true,error_on_line_overflow=true,format_strings=true \
           --config group_imports=StdExternalCrate \
           --config imports_granularity=Crate \
           --config hex_literal_case=Upper \
-          2>&1 | eval "$SEVERITY_TRANSFORM" | reviewdog \
+          2>/dev/null || true) | \
+          perl -pe 's{message="([^"]*)"}{my $m=$1; $m=~s/</&lt;/g; $m=~s/>/&gt;/g; "message=\"$m\""}ge' | \
+          eval "$SEVERITY_TRANSFORM" | reviewdog \
             -f=checkstyle \
             -reporter=github-pr-review \
             -filter-mode=nofilter \
