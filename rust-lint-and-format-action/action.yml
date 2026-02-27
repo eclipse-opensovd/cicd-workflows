@@ -34,6 +34,10 @@ inputs:
     description: 'Additional features to pass to clippy (e.g. "integration-tests")'
     required: false
     default: 'default'
+  reporter:
+    description: 'Reporter to use for reviewdog'
+    required: false
+    default: 'github-pr-review'
 
 runs:
   using: 'composite'
@@ -77,7 +81,7 @@ runs:
           --config hex_literal_case=Upper \
           2>&1 | eval "$SEVERITY_TRANSFORM" | reviewdog \
             -f=checkstyle \
-            -reporter=github-pr-review \
+            -reporter=${{ inputs.reporter }} \
             -filter-mode=nofilter \
             -fail-level="$FAIL_LEVEL" \
             -level=error
@@ -85,8 +89,9 @@ runs:
     - name: Clippy
       uses: giraffate/clippy-action@v1
       with:
-        reporter: 'github-pr-review'
+        reporter: ${{ inputs.reporter }}
         github_token: ${{ inputs.github-token }}
         clippy_flags: --locked --all-targets --features ${{ inputs.clippy-features }} ${{ inputs.clippy-deny-warnings == 'true' && '-- -D warnings' || '' }}
         filter_mode: 'nofilter'
         fail_on_error: ${{ inputs.fail-on-clippy-error }}
+        level: ${{ inputs.fail-on-clippy-error == 'true' && 'error' || 'warning' }}
