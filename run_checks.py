@@ -70,7 +70,7 @@ def patch_config(config_content, *, fix_mode):
 
 
 def patch_hook_script(
-    script_content, *, copyright_text, license_id, template, fix_mode
+    script_content, *, copyright_text, license_id, template, ignore_paths, fix_mode
 ):
     """Patch the reuse-annotate hook script with configured values.
 
@@ -88,6 +88,10 @@ def patch_hook_script(
     script_content = script_content.replace(
         'DEFAULT_TEMPLATE = "opensovd"',
         f'DEFAULT_TEMPLATE = "{template}"',
+    )
+    script_content = script_content.replace(
+        'DEFAULT_IGNORE_PATHS = ""',
+        f'DEFAULT_IGNORE_PATHS = "{ignore_paths}"',
     )
 
     return script_content
@@ -181,6 +185,11 @@ def main():
         action="store_true",
         help="Run in check-only mode (no auto-fix). Used in CI to report issues without modifying files.",
     )
+    parser.add_argument(
+        "--ignore-paths",
+        default="",
+        help="Comma-separated list of file patterns to ignore during REUSE checks (e.g., '*.md,docs/**,*.txt')",
+    )
 
     args = parser.parse_args()
 
@@ -249,6 +258,7 @@ def main():
             copyright_text=args.copyright,
             license_id=args.license,
             template=args.template,
+            ignore_paths=args.ignore_paths,
             fix_mode=fix_mode,
         )
 

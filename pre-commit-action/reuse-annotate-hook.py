@@ -51,6 +51,7 @@ from pathlib import Path
 DEFAULT_COPYRIGHT = "The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"
 DEFAULT_LICENSE = "Apache-2.0"
 DEFAULT_TEMPLATE = "opensovd"
+DEFAULT_IGNORE_PATHS = ""
 STYLES_CONFIG = ".reuse/styles.toml"
 
 
@@ -163,10 +164,39 @@ def fix_wrong_copyright(filepath: str, copyright_text: str) -> None:
     path.write_text("".join(lines))
 
 
+def should_ignore(filepath: str, ignore_patterns: list[str]) -> bool:
+    """Check if a file should be ignored based on ignore patterns."""
+    if not ignore_patterns:
+        return False
+
+    # Normalize the filepath
+    filepath = filepath.replace("\\", "/")
+
+    for pattern in ignore_patterns:
+        pattern = pattern.strip()
+        if not pattern:
+            continue
+
+        # Support both simple glob patterns and path-based patterns
+        if fnmatch(filepath, pattern):
+            return True
+
+        # Also check just the filename
+        basename = os.path.basename(filepath)
+        if fnmatch(basename, pattern):
+            return True
+
+    return False
+
+
 def main() -> int:
     copyright_text = os.environ.get("REUSE_COPYRIGHT", DEFAULT_COPYRIGHT)
     license_id = os.environ.get("REUSE_LICENSE", DEFAULT_LICENSE)
     template = os.environ.get("REUSE_TEMPLATE", DEFAULT_TEMPLATE)
+    ignore_paths_str = os.environ.get("REUSE_IGNORE_PATHS", DEFAULT_IGNORE_PATHS)
+
+    # Parse ignore patterns from comma-separated string
+    ignore_patterns = [p.strip() for p in ignore_paths_str.split(",") if p.strip()]
 
     files = sys.argv[1:]
     if not files:
@@ -181,6 +211,10 @@ def main() -> int:
     styles = load_styles()
 
     for filepath in files:
+        # Skip ignored files
+        if should_ignore(filepath, ignore_patterns):
+            continue
+
         # Never annotate license text files in the LICENSES/ directory
         if filepath.startswith("LICENSES/") or "/LICENSES/" in filepath:
             continue
