@@ -34,6 +34,10 @@ inputs:
     description: 'Additional features to pass to clippy (e.g. "integration-tests")'
     required: false
     default: 'default'
+  rustfmt-enable-reviewdog:
+    description: 'Whether to enable reviewdog for rustfmt'
+    required: false
+    default: 'true'
   reporter:
     description: 'Reporter to use for reviewdog'
     required: false
@@ -59,6 +63,7 @@ runs:
         reviewdog_version: latest
 
     - name: Formatting (rustfmt via reviewdog)
+      if: ${{ inputs.rustfmt-enable-reviewdog == 'true' }}
       continue-on-error: ${{ inputs.fail-on-format-error == 'false' }}
       shell: bash
       env:
@@ -85,6 +90,18 @@ runs:
             -filter-mode=nofilter \
             -fail-level="$FAIL_LEVEL" \
             -level=error
+
+    - name: Formatting (rustfmt without reviewdog)
+      if: ${{ inputs.rustfmt-enable-reviewdog == 'false' }}
+      continue-on-error: ${{ inputs.fail-on-format-error == 'false' }}
+      shell: bash
+      run: |
+        cargo fmt -- \
+          --check \
+          --config error_on_unformatted=true,error_on_line_overflow=true,format_strings=true \
+          --config group_imports=StdExternalCrate \
+          --config imports_granularity=Crate \
+          --config hex_literal_case=Upper
 
     - name: Clippy
       uses: giraffate/clippy-action@v1
