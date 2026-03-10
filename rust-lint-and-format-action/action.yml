@@ -91,7 +91,7 @@ runs:
       with:
         reporter: ${{ inputs.reporter }}
         github_token: ${{ inputs.github-token }}
-        clippy_flags: --locked --all-targets --features ${{ inputs.clippy-features }} ${{ inputs.clippy-deny-warnings == 'true' && '-- -D warnings' || '' }}
+        clippy_flags: --locked --all-targets ${{ inputs.clippy-features == 'all-features' && '--all-features' || format('--features {0}', inputs.clippy-features) }} ${{ inputs.clippy-deny-warnings == 'true' && '-- -D warnings' || '' }}
         filter_mode: 'nofilter'
         fail_on_error: ${{ inputs.fail-on-clippy-error }}
         level: ${{ inputs.fail-on-clippy-error == 'true' && 'error' || 'warning' }}
