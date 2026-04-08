@@ -38,6 +38,10 @@ inputs:
     description: 'Whether to enable reviewdog for rustfmt'
     required: false
     default: 'true'
+  error-on-unformatted:
+    description: 'Whether to treat unformatted code as an error in rustfmt'
+    required: false
+    default: 'true'
   reporter:
     description: 'Reporter to use for reviewdog'
     required: false
@@ -86,7 +90,7 @@ runs:
         FMT_EXIT=0
         cargo fmt -- \
           --emit=checkstyle \
-          --config error_on_unformatted=true,error_on_line_overflow=true,format_strings=true \
+          --config error_on_unformatted=${{ inputs.error-on-unformatted }},error_on_line_overflow=true,format_strings=true \
           --config group_imports=StdExternalCrate \
           --config imports_granularity=Crate \
           --config hex_literal_case=Upper \
@@ -124,7 +128,7 @@ runs:
       run: |
         cargo fmt -- \
           --check \
-          --config error_on_unformatted=true,error_on_line_overflow=true,format_strings=true \
+          --config error_on_unformatted=${{ inputs.error-on-unformatted }},error_on_line_overflow=true,format_strings=true \
           --config group_imports=StdExternalCrate \
           --config imports_granularity=Crate \
           --config hex_literal_case=Upper
