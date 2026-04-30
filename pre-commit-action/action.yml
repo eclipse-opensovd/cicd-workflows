@@ -45,6 +45,16 @@ inputs:
       Comma-separated list of file patterns to ignore during REUSE checks (e.g., "*.md,docs/**,*.txt"). Files matching these patterns will be skipped by reuse annotate.
     required: false
     default: ''
+  no-unicode-extensions:
+    description: >
+      Comma-separated list of file extensions to check for non-ASCII characters (e.g., ".py,.rs,.c"). When non-empty, any file with a matching extension that contains a byte > 127 will cause the check to fail. Disabled by default (empty string).
+    required: false
+    default: ''
+  allowed-unicode-chars:
+    description: >
+      Comma-separated Unicode characters to allow in the no-unicode check. When non-empty, these characters are permitted even in files checked by no-unicode-extensions. Empty by default (no characters allowed).
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -109,4 +119,7 @@ runs:
           --copyright="${{ inputs.copyright-text }}" \
           --license="${{ inputs.license }}" \
           --template="${{ inputs.reuse-template }}" \
-          --ignore-paths="${{ inputs.ignore-paths }}"
+          --ignore-paths="${{ inputs.ignore-paths }}" \
+          --no-unicode-extensions="${{ inputs.no-unicode-extensions }}" \
+          --allowed-unicode-chars="${{ inputs.allowed-unicode-chars }}" \
+          --no-unicode-check-script="${GITHUB_ACTION_PATH}/no-unicode-check.py"

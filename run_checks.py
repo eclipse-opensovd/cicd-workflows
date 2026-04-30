@@ -33,6 +33,9 @@ REPO_BASE_URL = (
 )
 CONFIG_URL_TEMPLATE = f"{REPO_BASE_URL}/pre-commit-action/.pre-commit-config.yml"
 HOOK_SCRIPT_URL_TEMPLATE = f"{REPO_BASE_URL}/pre-commit-action/reuse-annotate-hook.py"
+NO_UNICODE_CHECK_SCRIPT_URL_TEMPLATE = (
+    f"{REPO_BASE_URL}/pre-commit-action/no-unicode-check.py"
+)
 TEMPLATE_URL_TEMPLATE = f"{REPO_BASE_URL}/.reuse/templates/{{template}}.jinja2"
 LICENSE_URL_TEMPLATE = f"{REPO_BASE_URL}/LICENSES/{{license}}.txt"
 REUSE_TOML_URL_TEMPLATE = f"{REPO_BASE_URL}/REUSE.toml"
@@ -43,7 +46,9 @@ CLIPPY_LINTS_CHECK_SCRIPT_URL_TEMPLATE = (
 )
 
 
-def patch_config(config_content, *, fix_mode):
+def patch_config(
+    config_content, *, fix_mode, no_unicode_extensions="", allowed_unicode_chars=""
+):
     """Patch the pre-commit config for fix mode vs check-only mode.
 
     In fix mode (local), ruff auto-fixes issues in place.
@@ -65,6 +70,27 @@ def patch_config(config_content, *, fix_mode):
             "cargo fmt --check",
             "cargo fmt",
         )
+
+    if no_unicode_extensions:
+        parts = [
+            e.strip().lstrip(".")
+            for e in no_unicode_extensions.split(",")
+            if e.strip().lstrip(".")
+        ]
+        if parts:
+            files_regex = r"\.(" + "|".join(parts) + r")$"
+            entry = "python no-unicode-check.py"
+            if allowed_unicode_chars:
+                entry += f" --allowed-chars={allowed_unicode_chars}"
+            hook_block = (
+                "      - id: no-unicode-check\n"
+                "        name: No Unicode characters allowed\n"
+                f"        entry: {entry}\n"
+                "        language: system\n"
+                f"        files: '{files_regex}'\n"
+                "        pass_filenames: true\n"
+            )
+            config_content = config_content.rstrip("\n") + "\n" + hook_block
 
     return config_content
 
@@ -181,6 +207,11 @@ def main():
         help="Path to a local reuse-annotate-hook.py (skips downloading from remote)",
     )
     parser.add_argument(
+        "--no-unicode-check-script",
+        default=None,
+        help="Path to a local no-unicode-check.py (skips downloading from remote)",
+    )
+    parser.add_argument(
         "--no-fix",
         action="store_true",
         help="Run in check-only mode (no auto-fix). Used in CI to report issues without modifying files.",
@@ -189,6 +220,16 @@ def main():
         "--ignore-paths",
         default="",
         help="Comma-separated list of file patterns to ignore during REUSE checks (e.g., '*.md,docs/**,*.txt')",
+    )
+    parser.add_argument(
+        "--no-unicode-extensions",
+        default="",
+        help="Comma-separated file extensions to check for non-ASCII characters (e.g., '.py,.rs'). Empty string disables the check.",
+    )
+    parser.add_argument(
+        "--allowed-unicode-chars",
+        default="",
+        help="Comma-separated Unicode characters to allow in the no-unicode check (e.g., '\u00b5,\u00a7'). Empty by default.",
     )
 
     args = parser.parse_args()
@@ -218,14 +259,24 @@ def main():
             ) as f:
                 with urllib.request.urlopen(config_url) as response:
                     config_content = response.read().decode()
-                config_content = patch_config(config_content, fix_mode=fix_mode)
+                config_content = patch_config(
+                    config_content,
+                    fix_mode=fix_mode,
+                    no_unicode_extensions=args.no_unicode_extensions,
+                    allowed_unicode_chars=args.allowed_unicode_chars,
+                )
                 f.write(config_content)
                 config_path = f.name
             config_is_temp = True
         else:
             # Local config provided: always patch a temp copy to inject settings
             config_content = Path(config_path).read_text()
-            config_content = patch_config(config_content, fix_mode=fix_mode)
+            config_content = patch_config(
+                config_content,
+                fix_mode=fix_mode,
+                no_unicode_extensions=args.no_unicode_extensions,
+                allowed_unicode_chars=args.allowed_unicode_chars,
+            )
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".yml", delete=False
             ) as f:
@@ -267,6 +318,28 @@ def main():
         # Clean up if we created the file (downloaded or copied from elsewhere)
         if not hook_existed_in_cwd:
             cleanup_list.append({"file": hook_cwd_path, "dirs": []})
+
+        # Ensure no-unicode-check.py is in CWD when the feature is enabled so
+        # the pre-commit entry 'python no-unicode-check.py' resolves correctly.
+        if args.no_unicode_extensions:
+            no_unicode_cwd_path = Path("no-unicode-check.py")
+            no_unicode_existed_in_cwd = no_unicode_cwd_path.exists()
+
+            if args.no_unicode_check_script:
+                no_unicode_cwd_path.write_text(
+                    Path(args.no_unicode_check_script).read_text()
+                )
+            elif not no_unicode_existed_in_cwd:
+                cleanup_list.append(
+                    download_if_missing(
+                        no_unicode_cwd_path,
+                        NO_UNICODE_CHECK_SCRIPT_URL_TEMPLATE.format(branch=branch),
+                        "no-unicode-check script",
+                    )
+                )
+
+            if args.no_unicode_check_script and not no_unicode_existed_in_cwd:
+                cleanup_list.append({"file": no_unicode_cwd_path, "dirs": []})
 
         # Ensure REUSE assets are available locally
         reuse_toml_url = REUSE_TOML_URL_TEMPLATE.format(branch=branch)

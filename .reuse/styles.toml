@@ -10,7 +10,7 @@
 
 # Map file patterns to reuse annotate --style values.
 # Keys = reuse style names, values = shell glob patterns matched against basename.
-# Every file type MUST have a matching pattern — unmatched files will error.
+# Every file type MUST have a matching pattern - unmatched files will error.
 #
 # Downstream repos can override by committing their own .reuse/styles.toml.
 

@@ -140,21 +140,21 @@ def main():
     # Report results
     if not missing and not mismatched:
         print(
-            f"✓ All {len(shared_lints)} shared lints are correctly configured in {cargo_toml_path}"
+            f"[OK] All {len(shared_lints)} shared lints are correctly configured in {cargo_toml_path}"
         )
         return 0
 
     exit_code = 0
 
     if missing:
-        print(f"✗ Missing {len(missing)} lint(s) in {cargo_toml_path}:")
+        print(f"[FAIL] Missing {len(missing)} lint(s) in {cargo_toml_path}:")
         for lint in missing:
             config = shared_lints[lint]
             print(f"  - {lint} = {config}")
         exit_code = 1
 
     if mismatched:
-        print(f"\n✗ {len(mismatched)} lint(s) have different configurations:")
+        print(f"\n[FAIL] {len(mismatched)} lint(s) have different configurations:")
         for lint, shared_config, cargo_config in mismatched:
             print(f"  - {lint}:")
             print(f"      Shared: {shared_config}")

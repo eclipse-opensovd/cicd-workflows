@@ -42,6 +42,14 @@ on:
         description: 'Name of reuse Jinja2 template in .reuse/templates/ (without .jinja2 suffix), defaults to "opensovd"'
         required: false
         type: string
+      no-unicode-extensions:
+        description: 'Comma-separated file extensions to check for non-ASCII characters (e.g., ".py,.rs"). Empty string disables the check.'
+        required: false
+        type: string
+      allowed-unicode-chars:
+        description: 'Comma-separated Unicode characters to allow in the no-unicode check. Empty by default.'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -63,3 +71,5 @@ jobs:
           copyright-text: ${{ inputs.copyright-text }}
           license: ${{ inputs.license }}
           reuse-template: ${{ inputs.reuse-template }}
+          no-unicode-extensions: ${{ inputs.no-unicode-extensions || '.py,.yml,.toml,.jinja2' }}
+          allowed-unicode-chars: ${{ inputs.allowed-unicode-chars }}
