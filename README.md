@@ -49,6 +49,7 @@ jobs:
       copyright-text: ""  # Optional, defaults to "The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"
       license: ""  # Optional, defaults to "Apache-2.0"
       reuse-template: ""  # Optional, defaults to "opensovd"
+      no-unicode-extensions: ""  # Optional, e.g. ".py,.rs,.c"; disabled by default
 ```
 
 #### Available Inputs
@@ -59,6 +60,7 @@ jobs:
 - `copyright-text` (optional): Copyright holder text for `reuse annotate` (e.g. `"ACME Inc."`). Defaults to `"The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"`.
 - `license` (optional): SPDX license identifier for `reuse annotate` (e.g. `"MIT"`). Defaults to `"Apache-2.0"`.
 - `reuse-template` (optional): Name of the Jinja2 template in `.reuse/templates/` (without `.jinja2` suffix). Consumer repos can provide their own template. Defaults to `"opensovd"`.
+- `no-unicode-extensions` (optional): Comma-separated list of file extensions (e.g. `".py,.rs,.c"`) whose contents are checked for non-ASCII bytes. Any file with a matching extension that contains a byte with value > 127 causes the check to fail with the offending file path and line number reported. Extensions may include or omit the leading dot. Disabled by default (empty string).
 
 ### Using Individual Actions
 
@@ -158,6 +160,7 @@ When a formatter makes changes to your code, the pre-commit hook fails, requirin
 - `copyright-text`: Copyright holder text for `reuse annotate` (default: `"The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"`)
 - `license`: SPDX license identifier for `reuse annotate` (default: `"Apache-2.0"`)
 - `reuse-template`: Name of Jinja2 template in `.reuse/templates/` (default: `"opensovd"`)
+- `no-unicode-extensions`: Comma-separated file extensions to check for non-ASCII characters (e.g. `".py,.rs,.c"`). Disabled by default (empty string). When enabled, any file with a matching extension containing a byte > 127 fails the check.
 
 
 ## Running Checks Locally
@@ -196,6 +199,13 @@ uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/ru
 ```bash
 uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py --copyright="ACME Inc." --license=MIT --template=mytemplate
 ```
+
+###### Check for non-ASCII characters in specific file types
+```bash
+uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py --no-unicode-extensions=".py,.rs"
+```
+
+The `--no-unicode-extensions` flag accepts a comma-separated list of file extensions (with or without a leading dot). When provided, any file with a matching extension that contains a non-ASCII byte (value > 127) causes the check to fail, reporting the file path and line number. Omit the flag or pass an empty string to disable this check.
 
 The script automatically fixes ruff lint violations and applies ruff formatting. In CI, issues are only reported without auto-fix.
 
