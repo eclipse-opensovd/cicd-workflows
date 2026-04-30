@@ -96,6 +96,10 @@ runs:
       shell: bash
       run: uv tool install reuse
 
+    - name: Install taplo
+      shell: bash
+      run: uv tool install taplo
+
     - name: Run checks
       shell: bash
       run: |

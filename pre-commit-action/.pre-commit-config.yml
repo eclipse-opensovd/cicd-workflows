@@ -31,11 +31,20 @@ repos:
         args: [--output-format=full]
       - id: ruff-format
         args: [--diff]
-  - repo: https://github.com/ComPWA/taplo-pre-commit
-    rev: v0.9.3
+  - repo: local
     hooks:
       - id: taplo-format
+        name: taplo-format
+        description: Format TOML documents
+        entry: taplo format
+        language: system
+        types: [toml]
       - id: taplo-lint
+        name: taplo-lint
+        description: Lint TOML documents
+        entry: taplo lint
+        language: system
+        types: [toml]
   - repo: https://github.com/fsfe/reuse-tool
     rev: v6.2.0
     hooks:
