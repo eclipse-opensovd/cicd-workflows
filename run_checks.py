@@ -337,11 +337,6 @@ def main():
             check=False,
             env=env,
         )
-
-        # Clean up
-        if config_is_temp:
-            Path(config_path).unlink(missing_ok=True)
-        cleanup_downloads(cleanup_list)
         sys.exit(result.returncode)
     except urllib.error.HTTPError as e:
         print(f"Error downloading config: {e}", file=sys.stderr)
@@ -349,9 +344,6 @@ def main():
             f"Make sure the branch '{branch}' exists in the repository.",
             file=sys.stderr,
         )
-        if config_is_temp and config_path:
-            Path(config_path).unlink(missing_ok=True)
-        cleanup_downloads(cleanup_list)
         sys.exit(1)
     except urllib.error.URLError as e:
         print(
@@ -362,16 +354,14 @@ def main():
             "Could not reach GitHub. Please check your internet connection and try again.",
             file=sys.stderr,
         )
-        if config_is_temp and config_path:
-            Path(config_path).unlink(missing_ok=True)
-        cleanup_downloads(cleanup_list)
         sys.exit(1)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
         if config_is_temp and config_path:
             Path(config_path).unlink(missing_ok=True)
         cleanup_downloads(cleanup_list)
-        sys.exit(1)
 
 
 if __name__ == "__main__":
