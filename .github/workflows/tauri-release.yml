@@ -256,9 +256,9 @@ jobs:
 
             // Each rule matches the Tauri-generated bundle name, provides the
             // new name (with OS/arch identifier) and the updater platform
-            // key — null means the bundle is for direct download only.
+            // key - null means the bundle is for direct download only.
             const bundleRules = [
-              // ── macOS aarch64 ──────────────────────────────────────────────
+              // macOS aarch64
               {
                 match:      new RegExp(`^${bin}_aarch64\\.app\\.tar\\.gz$`, 'i'),
                 newName:    `${bin}_${version}_darwin_aarch64.app.tar.gz`,
@@ -269,7 +269,7 @@ jobs:
                 newName:    `${bin}_${version}_darwin_aarch64.dmg`,
                 updaterKey: null,
               },
-              // ── Linux x86_64 ───────────────────────────────────────────────
+              // Linux x86_64
               {
                 match:      new RegExp(`^${binU}_[\\d.]+_amd64\\.AppImage$`, 'i'),
                 newName:    `${bin}_${version}_linux_amd64.AppImage`,
@@ -285,7 +285,7 @@ jobs:
                 newName:    `${bin}-${version}-1_linux_x86_64.rpm`,
                 updaterKey: null,
               },
-              // ── Windows x64 ───────────────────────────────────────────────
+              // Windows x64
               {
                 match:      new RegExp(`^${binU}_[\\d.]+_x64-setup\\.exe$`, 'i'),
                 newName:    `${bin}_${version}_windows_x64-setup.exe`,
@@ -303,7 +303,7 @@ jobs:
             for (const rule of bundleRules) {
               const bundle = assets.find(a => rule.match.test(a.name));
               if (!bundle) {
-                core.warning(`No asset matched pattern ${rule.match} — skipping`);
+                core.warning(`No asset matched pattern ${rule.match} - skipping`);
                 continue;
               }
 
@@ -311,7 +311,7 @@ jobs:
               const { data: renamed } = await github.rest.repos.updateReleaseAsset({
                 owner, repo, asset_id: bundle.id, name: rule.newName,
               });
-              core.info(`Renamed: ${bundle.name} → ${rule.newName}`);
+              core.info(`Renamed: ${bundle.name} -> ${rule.newName}`);
 
               // Rename the companion .sig file if present
               const sig = assets.find(a => a.name === `${bundle.name}.sig`);
@@ -319,7 +319,7 @@ jobs:
                 await github.rest.repos.updateReleaseAsset({
                   owner, repo, asset_id: sig.id, name: `${rule.newName}.sig`,
                 });
-                core.info(`Renamed: ${sig.name} → ${rule.newName}.sig`);
+                core.info(`Renamed: ${sig.name} -> ${rule.newName}.sig`);
 
                 if (rule.updaterKey) {
                   const sigResp = await github.request(
@@ -330,12 +330,12 @@ jobs:
                   platforms[rule.updaterKey] = { signature, url: renamed.browser_download_url };
                 }
               } else if (rule.updaterKey) {
-                core.warning(`No .sig found for ${bundle.name} — skipping updater entry`);
+                core.warning(`No .sig found for ${bundle.name} - skipping updater entry`);
               }
             }
 
             if (Object.keys(platforms).length === 0) {
-              core.setFailed('No updater platform entries found — cannot generate latest.json');
+              core.setFailed('No updater platform entries found - cannot generate latest.json');
               return;
             }
 
