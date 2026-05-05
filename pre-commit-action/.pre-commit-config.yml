@@ -86,3 +86,11 @@ repos:
         language: system
         types: [rust]
         pass_filenames: false
+      - id: no-banner-comment-check
+        name: No banner-style comments allowed
+        entry: uv run no-banner-comment-check.py
+        args:
+          - --banner-chars==\-#\*/~_+
+          - --min-length=5
+        language: system
+        pass_filenames: true
