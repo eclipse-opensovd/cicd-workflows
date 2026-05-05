@@ -185,21 +185,54 @@ def should_ignore(filepath: str, ignore_patterns: list[str]) -> bool:
     return False
 
 
+def is_git_new_file(filepath: str) -> bool:
+    """Return True if the file is newly added (not yet in HEAD)."""
+    result = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", filepath],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        return True
+    result2 = subprocess.run(
+        ["git", "show", f"HEAD:{filepath}"],
+        capture_output=True,
+    )
+    return result2.returncode != 0
+
+
+def check_copyright_year_for_new_file(filepath: str) -> bool:
+    """Fail if a new file's SPDX-FileCopyrightText year is not the current year.
+
+    Returns True when the year is valid (or the file has no SPDX header yet).
+    Returns False and prints an error when the year is wrong.
+    """
+    try:
+        content = Path(filepath).read_text(errors="replace")
+    except OSError:
+        return True
+
+    match = re.search(r"SPDX-FileCopyrightText.*?(\d{4})", content)
+    if not match:
+        return True
+
+    year_in_file = match.group(1)
+    current = _current_year()
+    if year_in_file != current:
+        print(
+            f"{filepath}: new file has copyright year {year_in_file}, "
+            f"expected {current}",
+            file=sys.stderr,
+        )
+        return False
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--copyright", default=os.environ.get("REUSE_COPYRIGHT", DEFAULT_COPYRIGHT)
-    )
-    parser.add_argument(
-        "--license", default=os.environ.get("REUSE_LICENSE", DEFAULT_LICENSE)
-    )
-    parser.add_argument(
-        "--template", default=os.environ.get("REUSE_TEMPLATE", DEFAULT_TEMPLATE)
-    )
-    parser.add_argument(
-        "--ignore-paths",
-        default=os.environ.get("REUSE_IGNORE_PATHS", DEFAULT_IGNORE_PATHS),
-    )
+    parser.add_argument("--copyright", default=DEFAULT_COPYRIGHT)
+    parser.add_argument("--license", default=DEFAULT_LICENSE)
+    parser.add_argument("--template", default=DEFAULT_TEMPLATE)
+    parser.add_argument("--ignore-paths", default=DEFAULT_IGNORE_PATHS)
     parser.add_argument("files", nargs="*")
     args = parser.parse_args()
 
@@ -211,6 +244,8 @@ def main() -> int:
     files = args.files
     if not files:
         return 0
+
+    failed = False
 
     # Template flag
     tpl_flag: list[str] = []
@@ -233,6 +268,8 @@ def main() -> int:
         # This avoids overwriting existing (possibly different but valid)
         # license/copyright information with the template.
         if has_valid_spdx_header(filepath):
+            if is_git_new_file(filepath) and not check_copyright_year_for_new_file(filepath):
+                failed = True
             continue
 
         # Resolve comment style
@@ -259,7 +296,7 @@ def main() -> int:
         ]
         subprocess.run(cmd, check=False)
 
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
