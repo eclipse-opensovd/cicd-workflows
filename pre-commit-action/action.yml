@@ -112,14 +112,8 @@ runs:
 
     - name: Run checks
       shell: bash
+      env:
+        SKIP: reuse-annotate
       run: |
-        uv run "${GITHUB_ACTION_PATH}/../run_checks.py" --no-fix \
-          ${{ steps.inputs.outputs.config_flag }} \
-          --hook-script="${GITHUB_ACTION_PATH}/reuse-annotate-hook.py" \
-          --copyright="${{ inputs.copyright-text }}" \
-          --license="${{ inputs.license }}" \
-          --template="${{ inputs.reuse-template }}" \
-          --ignore-paths="${{ inputs.ignore-paths }}" \
-          --no-unicode-extensions="${{ inputs.no-unicode-extensions }}" \
-          --allowed-unicode-chars="${{ inputs.allowed-unicode-chars }}" \
-          --no-unicode-check-script="${GITHUB_ACTION_PATH}/no-unicode-check.py"
+        uv run "${GITHUB_ACTION_PATH}/../run_checks.py" \
+          ${{ steps.inputs.outputs.config_flag }}

@@ -10,6 +10,10 @@
 # terms of the Apache License Version 2.0 which is available at
 # https://www.apache.org/licenses/LICENSE-2.0
 
+# /// script
+# dependencies = []
+# ///
+
 import argparse
 import sys
 

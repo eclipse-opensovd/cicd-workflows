@@ -54,6 +54,11 @@ repos:
       - id: reuse-annotate
         name: Add missing license headers (REUSE)
         entry: uv run reuse-annotate-hook.py
+        args:
+          - --copyright=The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+          - --license=Apache-2.0
+          - --template=opensovd
+          - --ignore-paths=
         language: system
         pass_filenames: true
         exclude: ^(LICENSE|NOTICE|CONTRIBUTORS)$

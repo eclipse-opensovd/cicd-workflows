@@ -27,15 +27,11 @@ Then runs reuse annotate to add/update the header (including template text).
 Comment style mapping is read from .reuse/styles.toml (downloaded or
 committed by the consumer repo).  Every file type that needs a header
 must be declared there; unmatched files will cause reuse annotate to error.
-
-Configurable via env vars (with defaults):
-  REUSE_COPYRIGHT  - copyright holder text
-  REUSE_LICENSE    - SPDX license identifier
-  REUSE_TEMPLATE   - name of .reuse/templates/<name>.jinja2
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import re
 import subprocess
@@ -190,15 +186,29 @@ def should_ignore(filepath: str, ignore_patterns: list[str]) -> bool:
 
 
 def main() -> int:
-    copyright_text = os.environ.get("REUSE_COPYRIGHT", DEFAULT_COPYRIGHT)
-    license_id = os.environ.get("REUSE_LICENSE", DEFAULT_LICENSE)
-    template = os.environ.get("REUSE_TEMPLATE", DEFAULT_TEMPLATE)
-    ignore_paths_str = os.environ.get("REUSE_IGNORE_PATHS", DEFAULT_IGNORE_PATHS)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--copyright", default=os.environ.get("REUSE_COPYRIGHT", DEFAULT_COPYRIGHT)
+    )
+    parser.add_argument(
+        "--license", default=os.environ.get("REUSE_LICENSE", DEFAULT_LICENSE)
+    )
+    parser.add_argument(
+        "--template", default=os.environ.get("REUSE_TEMPLATE", DEFAULT_TEMPLATE)
+    )
+    parser.add_argument(
+        "--ignore-paths",
+        default=os.environ.get("REUSE_IGNORE_PATHS", DEFAULT_IGNORE_PATHS),
+    )
+    parser.add_argument("files", nargs="*")
+    args = parser.parse_args()
 
-    # Parse ignore patterns from comma-separated string
-    ignore_patterns = [p.strip() for p in ignore_paths_str.split(",") if p.strip()]
+    copyright_text = args.copyright
+    license_id = args.license
+    template = args.template
+    ignore_patterns = [p.strip() for p in args.ignore_paths.split(",") if p.strip()]
 
-    files = sys.argv[1:]
+    files = args.files
     if not files:
         return 0
 

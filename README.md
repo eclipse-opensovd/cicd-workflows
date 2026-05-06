@@ -172,12 +172,10 @@ When a formatter makes changes to your code, the pre-commit hook fails, requirin
 
 #### In This Repository
 
-
-
 To run pre-commit checks locally in this repository:
 
 ```bash
-uv tool run pre-commit@4.2 run --all-files --config pre-commit-action/.pre-commit-config.yml
+uv run pr-commit.py
 ```
 
 #### In Your Repository (Using This Action's Config)
@@ -187,49 +185,48 @@ You have two options to run the same checks locally that run in CI:
 ##### Option 1: Using the `run_checks.py` script (One-off execution)
 
 ```bash
-# Run with the default 'main' branch config
+# Pin to a specific commit SHA (recommended for reproducibility)
+uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/<SHA>/run_checks.py
+
+# Or use the default 'main' branch
 uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py
 ```
 
-###### Specify a different branch/tag/commit
+###### Specify a different branch, tag, or commit SHA
 ```bash
-uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py your-branch-name
+uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py your-branch-or-sha
 ```
-
-###### Custom copyright and license
-```bash
-uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py --copyright="ACME Inc." --license=MIT --template=mytemplate
-```
-
-###### Check for non-ASCII characters in specific file types
-```bash
-uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py --no-unicode-extensions=".py,.rs"
-```
-
-To allow specific Unicode characters (e.g. `µ` and `§`):
-```bash
-uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py --no-unicode-extensions=".py,.rs" --allowed-unicode-chars="µ,§"
-```
-
-The `--no-unicode-extensions` flag accepts a comma-separated list of file extensions (with or without a leading dot). When provided, any file with a matching extension that contains a non-ASCII byte (value > 127) causes the check to fail, reporting the file path and line number. The `--allowed-unicode-chars` flag accepts a comma-separated list of Unicode characters that are exempt from this check. Omit the flags or pass empty strings to disable.
-
-The script automatically fixes ruff lint violations and applies ruff formatting. In CI, issues are only reported without auto-fix.
-
 
 #### Option 2: Using pre-commit directly (Recommended for development)
 
-Create a `.pre-commit-config.yaml` file in your repository root:
+Create a `.pre-commit-config.yaml` file in your repository root. Pin hook entry URLs to a specific commit SHA for reproducibility:
 
 ```yaml
 repos:
   - repo: local
     hooks:
-      - id: shared-checks
-        name: Shared pre-commit checks
-        entry: uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/main/run_checks.py
+      - id: reuse-annotate
+        name: Add missing license headers (REUSE)
+        # Replace <SHA> with a pinned commit from eclipse-opensovd/cicd-workflows
+        entry: uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/<SHA>/pre-commit-action/reuse-annotate-hook.py
+        args:
+          - --copyright=Your Copyright Holder
+          - --license=Apache-2.0
+          - --template=your-template
+          - --ignore-paths=docs/**,*.md
         language: system
-        pass_filenames: false
+        pass_filenames: true
+        exclude: ^(LICENSE|NOTICE|CONTRIBUTORS)$
+      - id: no-unicode-check
+        name: No Unicode characters allowed
+        entry: uv run https://raw.githubusercontent.com/eclipse-opensovd/cicd-workflows/<SHA>/pre-commit-action/no-unicode-check.py
+        args: [--allowed-chars=µ,§]
+        language: system
+        files: '\.(py|rs|toml|yml)$'
+        pass_filenames: true
 ```
+
+The `--copyright`, `--license`, `--template`, and `--ignore-paths` args on `reuse-annotate` must match the values used in your `checks.yml` workflow inputs.
 
 Then install and use pre-commit normally:
 
@@ -244,14 +241,9 @@ pre-commit run --all-files
 pre-commit run
 ```
 
-**Custom Config**: If you've specified a custom `pre-commit-config-path` in your workflow, you can run pre-commit directly:
+**Run Specific Hooks**: To run only the annotate hook:
 ```bash
-uv tool run pre-commit@4.2 run --all-files --config .pre-commit-config.yml
-```
-
-**Run Specific Hooks**: To run only the shared checks:
-```bash
-pre-commit run shared-checks --all-files
+pre-commit run reuse-annotate --all-files
 ```
 
 ### Installing Required Tools
