@@ -1,0 +1,135 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+
+name: Conventional Commits
+
+on:
+  workflow_call:
+    inputs:
+      validate-pr-title:
+        description: "Validate PR title against Conventional Commits format"
+        type: boolean
+        default: true
+      validate-commits:
+        description: >
+          Validate individual commit subjects in the PR using prek with the conventional-pre-commit hook from the caller's .pre-commit-config.yaml
+        type: boolean
+        default: true
+      types:
+        description: >
+          Newline-separated list of allowed conventional commit types for PR title validation (via amannn/action-semantic-pull-request). Commit subject validation uses the types configured in the caller's .pre-commit-config.yaml.
+        type: string
+        default: |
+          feat
+          fix
+          docs
+          style
+          refactor
+          perf
+          test
+          build
+          ci
+          chore
+          revert
+      scopes:
+        description: "Newline-separated list of allowed scopes for PR title validation (empty = any scope allowed)"
+        type: string
+        default: ""
+      require-scope:
+        description: "Require a scope in PR title"
+        type: boolean
+        default: false
+      subject-pattern:
+        description: "Regex pattern the PR title subject (text after type/scope) must match"
+        type: string
+        default: ""
+      subject-pattern-error:
+        description: "Error message when subject-pattern fails"
+        type: string
+        default: ""
+      ignore-authors:
+        description: "Newline-separated list of commit author emails to ignore (e.g. bots)"
+        type: string
+        default: ""
+      prek-version:
+        description: "Version of prek to install (empty = latest)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-title:
+    name: PR Title
+    if: ${{ inputs.validate-pr-title && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: ${{ inputs.types }}
+          scopes: ${{ inputs.scopes }}
+          requireScope: ${{ inputs.require-scope }}
+          subjectPattern: ${{ inputs.subject-pattern }}
+          subjectPatternError: ${{ inputs.subject-pattern-error }}
+
+  commit-subjects:
+    name: Commit Subjects
+    if: ${{ inputs.validate-commits && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Install prek
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.prek-version }}" ]]; then
+            uv tool install "prek==${{ inputs.prek-version }}"
+          else
+            uv tool install prek
+          fi
+
+      - name: Validate commit subjects
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          IGNORE_AUTHORS: ${{ inputs.ignore-authors }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          declare -A ignore_map
+          while IFS= read -r email; do
+            email=$(echo "$email" | xargs)
+            [[ -n "$email" ]] && ignore_map["$email"]=1
+          done <<< "$IGNORE_AUTHORS"
+
+          fail=0
+          for sha in $(git rev-list "$BASE_SHA..$HEAD_SHA"); do
+            author_email=$(git log -1 --format='%ae' "$sha")
+            if [[ -n "${ignore_map[$author_email]:-}" ]]; then
+              continue
+            fi
+
+            git log -1 --format=%B "$sha" > /tmp/commit-msg
+            if ! prek run --hook-stage commit-msg \
+                --commit-msg-filename /tmp/commit-msg conventional-pre-commit; then
+              echo "::error::Non-conventional commit: $(git log -1 --format='%h %s' "$sha")"
+              fail=1
+            fi
+          done
+          exit "$fail"

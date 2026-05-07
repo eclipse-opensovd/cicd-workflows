@@ -108,6 +108,98 @@ jobs:
           clippy-deny-warnings: 'true'
 ```
 
+### Using the Conventional Commits Workflow
+
+The `conventional-commits.yml` workflow validates PR titles and individual commit messages against the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+
+Commit subject validation uses [prek](https://prek.j178.dev/) to run the `conventional-pre-commit` hook from the caller's `.pre-commit-config.yaml`. This ensures CI validates exactly what developers see locally.
+
+**Prerequisites**: The calling repository must have a `.pre-commit-config.yaml` with the `conventional-pre-commit` hook configured:
+
+```yaml
+# .pre-commit-config.yaml (in your repository)
+repos:
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+```
+
+**Usage**:
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+
+jobs:
+  conventional-commits:
+    uses: eclipse-opensovd/cicd-workflows/.github/workflows/conventional-commits.yml@main
+    with:
+      validate-pr-title: true
+      validate-commits: true
+```
+
+#### Available Inputs
+
+- `validate-pr-title` (optional): Validate PR title against Conventional Commits format. Defaults to `true`.
+- `validate-commits` (optional): Validate individual commit subjects using prek with the caller's `.pre-commit-config.yaml`. Defaults to `true`.
+- `types` (optional): Newline-separated list of allowed conventional commit types for PR title validation. Commit subject validation uses types from the caller's `.pre-commit-config.yaml`. Defaults to `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+- `scopes` (optional): Newline-separated list of allowed scopes for PR title validation. Empty means any scope is allowed.
+- `require-scope` (optional): Require a scope in PR title. Defaults to `false`.
+- `subject-pattern` (optional): Regex pattern the PR title subject must match.
+- `subject-pattern-error` (optional): Error message when `subject-pattern` fails.
+- `ignore-authors` (optional): Newline-separated list of commit author emails to skip (e.g. bot accounts).
+- `prek-version` (optional): Version of prek to install. Defaults to latest.
+
+### Using the Release Workflow
+
+The `release.yml` workflow packages build artifacts into platform archives, generates a changelog with git-cliff, creates SHA-512 checksums, optionally attests build provenance, and publishes a GitHub Release.
+
+```yaml
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    # Your build matrix that uploads artifacts named like:
+    #   my-app-x86_64-unknown-linux-gnu
+    #   my-app-aarch64-unknown-linux-gnu
+    #   my-app-x86_64-pc-windows-msvc
+    # Each artifact contains the binary (e.g. "my-app" or "my-app.exe").
+    ...
+
+  release:
+    needs: build
+    uses: eclipse-opensovd/cicd-workflows/.github/workflows/release.yml@main
+    with:
+      version: ${{ github.ref_name }}
+      artifact-pattern: "my-app-*"
+      binary-name: "my-app"
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+```
+
+#### Available Inputs
+
+- `version` (required): Release version string (e.g. `v1.2.3`, `nightly`, `latest`). Used for archive names and the GitHub Release title.
+- `artifact-pattern` (required): Pattern for `actions/download-artifact` to match build artifacts (e.g. `my-app-*`).
+- `binary-name` (required): Base name of the binary inside each artifact directory, without extension. Windows artifacts are expected to have a `.exe` suffix.
+- `git-cliff-version` (optional): Version of git-cliff to install. Defaults to `2.11.0`.
+- `git-cliff-args` (optional): Extra arguments for git-cliff (e.g. `--config cliff.toml`). The workflow automatically uses `--unreleased` for nightly/latest and `--current` for versioned tags.
+- `attestation` (optional): Generate build provenance attestation for release artifacts. Defaults to `true`.
+- `prerelease` (optional): Mark the release as a prerelease. Nightly and latest releases are automatically marked as prereleases. Defaults to `false`.
+- `delete-existing` (optional): Delete an existing release with the same tag before creating a new one. Useful for rolling releases. Defaults to `false`.
+- `draft` (optional): Create the release as a draft. Defaults to `false`.
+- `archive-prefix` (optional): Prefix for archive filenames. Defaults to the `binary-name` value. Archives are named `<prefix>-<version>-<target>.<ext>`.
+
 ## Actions in This Repository
 
 ### Pre-commit Action (`pre-commit-action/`)
