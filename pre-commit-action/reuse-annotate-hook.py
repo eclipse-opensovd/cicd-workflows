@@ -27,15 +27,11 @@ Then runs reuse annotate to add/update the header (including template text).
 Comment style mapping is read from .reuse/styles.toml (downloaded or
 committed by the consumer repo).  Every file type that needs a header
 must be declared there; unmatched files will cause reuse annotate to error.
-
-Configurable via env vars (with defaults):
-  REUSE_COPYRIGHT  - copyright holder text
-  REUSE_LICENSE    - SPDX license identifier
-  REUSE_TEMPLATE   - name of .reuse/templates/<name>.jinja2
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import re
 import subprocess
@@ -53,6 +49,36 @@ DEFAULT_LICENSE = "Apache-2.0"
 DEFAULT_TEMPLATE = "opensovd"
 DEFAULT_IGNORE_PATHS = ""
 STYLES_CONFIG = ".reuse/styles.toml"
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _ensure_reuse_assets(license_id: str, template: str) -> None:
+    """Copy REUSE assets from the prek-cached cicd-workflows clone into CWD.
+
+    ``reuse annotate`` expects REUSE.toml / LICENSES / templates in the
+    working tree, but this script runs from prek's cache.  Existing files
+    in CWD are never overwritten.
+    """
+    assets = [
+        ("REUSE.toml", _REPO_ROOT / "REUSE.toml"),
+        (".reuse/styles.toml", _REPO_ROOT / ".reuse" / "styles.toml"),
+        (
+            f".reuse/templates/{template}.jinja2",
+            _REPO_ROOT / ".reuse" / "templates" / f"{template}.jinja2",
+        ),
+        (
+            f"LICENSES/{license_id}.txt",
+            _REPO_ROOT / "LICENSES" / f"{license_id}.txt",
+        ),
+    ]
+
+    for dest_rel, source in assets:
+        dest = Path(dest_rel)
+        if dest.exists() or not source.exists():
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(source.read_bytes())
 
 
 def load_styles(config_path: str = STYLES_CONFIG) -> dict[str, list[str]]:
@@ -109,6 +135,66 @@ def _current_year() -> str:
     from datetime import datetime, timezone
 
     return str(datetime.now(tz=timezone.utc).year)
+
+
+def _merge_base_ref() -> str:
+    for remote_branch in ("origin/main", "origin/master"):
+        result = subprocess.run(
+            ["git", "merge-base", "HEAD", remote_branch],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    return "HEAD"
+
+
+def _is_new_file(filepath: str) -> bool:
+    base = _merge_base_ref()
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{base}:{filepath}"],
+        capture_output=True,
+    )
+    return result.returncode != 0
+
+
+def _fix_stale_copyright_year(filepath: str) -> bool:
+    """Update SPDX-FileCopyrightText year to current year for new files.
+
+    Returns True if the file was modified.
+    """
+    path = Path(filepath)
+    try:
+        content = path.read_text(errors="replace")
+    except OSError:
+        return False
+
+    current = _current_year()
+    updated = re.sub(
+        r"(SPDX-FileCopyrightText:\s*)\d{4}",
+        rf"\g<1>{current}",
+        content,
+    )
+    if updated != content:
+        path.write_text(updated)
+        print(f"Fixed copyright year to {current} in new file: {filepath}")
+        return True
+    return False
+
+
+def _has_stale_copyright_year(filepath: str) -> bool:
+    """Check whether a new file has a copyright year that is not the current year."""
+    path = Path(filepath)
+    try:
+        content = path.read_text(errors="replace")
+    except OSError:
+        return False
+
+    current = _current_year()
+    match = re.search(r"SPDX-FileCopyrightText:\s*(\d{4})", content)
+    if match:
+        return match.group(1) != current
+    return False
 
 
 def has_valid_spdx_header(filepath: str) -> bool:
@@ -190,17 +276,33 @@ def should_ignore(filepath: str, ignore_patterns: list[str]) -> bool:
 
 
 def main() -> int:
-    copyright_text = os.environ.get("REUSE_COPYRIGHT", DEFAULT_COPYRIGHT)
-    license_id = os.environ.get("REUSE_LICENSE", DEFAULT_LICENSE)
-    template = os.environ.get("REUSE_TEMPLATE", DEFAULT_TEMPLATE)
-    ignore_paths_str = os.environ.get("REUSE_IGNORE_PATHS", DEFAULT_IGNORE_PATHS)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--copyright", default=os.environ.get("REUSE_COPYRIGHT", DEFAULT_COPYRIGHT))
+    parser.add_argument("--license", default=os.environ.get("REUSE_LICENSE", DEFAULT_LICENSE))
+    parser.add_argument("--template", default=os.environ.get("REUSE_TEMPLATE", DEFAULT_TEMPLATE))
+    parser.add_argument(
+        "--ignore-paths",
+        default=os.environ.get("REUSE_IGNORE_PATHS", DEFAULT_IGNORE_PATHS),
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Check mode: report errors without modifying files (used in CI).",
+    )
+    parser.add_argument("files", nargs="*")
+    args = parser.parse_args()
 
-    # Parse ignore patterns from comma-separated string
-    ignore_patterns = [p.strip() for p in ignore_paths_str.split(",") if p.strip()]
+    copyright_text = args.copyright
+    license_id = args.license
+    template = args.template
+    check_mode = args.check
+    ignore_patterns = [p.strip() for p in args.ignore_paths.split(",") if p.strip()]
 
-    files = sys.argv[1:]
+    files = args.files
     if not files:
         return 0
+
+    _ensure_reuse_assets(license_id, template)
 
     # Template flag
     tpl_flag: list[str] = []
@@ -209,6 +311,8 @@ def main() -> int:
 
     # Load style config
     styles = load_styles()
+
+    errors: list[str] = []
 
     for filepath in files:
         # Skip ignored files
@@ -223,6 +327,16 @@ def main() -> int:
         # This avoids overwriting existing (possibly different but valid)
         # license/copyright information with the template.
         if has_valid_spdx_header(filepath):
+            if _is_new_file(filepath):
+                if check_mode:
+                    if _has_stale_copyright_year(filepath):
+                        errors.append(f"{filepath}: copyright year is not {_current_year()}")
+                else:
+                    _fix_stale_copyright_year(filepath)
+            continue
+
+        if check_mode:
+            errors.append(f"{filepath}: missing SPDX license header")
             continue
 
         # Resolve comment style
@@ -247,7 +361,14 @@ def main() -> int:
             f"--year={year}",
             filepath,
         ]
-        subprocess.run(cmd, check=False)
+        result = subprocess.run(cmd, check=False)
+        if result.returncode != 0:
+            errors.append(f"{filepath}: reuse annotate failed (exit {result.returncode})")
+
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}")
+        return 1
 
     return 0
 

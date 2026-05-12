@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+# SPDX-FileCopyrightText: 2026 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -18,36 +18,12 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
-      rust-nightly-version:
-        description: 'Rust nightly version to use (YYYY-MM-DD), defaults to 2025-07-14 if not set'
+      rust-toolchain:
+        description: 'Rust toolchain to install (e.g. "stable", "nightly-2025-07-14")'
         required: false
         type: string
-      python-version:
-        description: 'Python version to use for pre-commit environment'
-        required: false
-        type: string
-      pre-commit-config-path:
-        description: 'Path to a custom .pre-commit-config.yml in the consumer repository'
-        required: false
-        type: string
-      copyright-text:
-        description: 'Copyright holder text for reuse annotate, defaults to "The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"'
-        required: false
-        type: string
-      license:
-        description: 'SPDX license identifier for reuse annotate (e.g. "Apache-2.0"), defaults to "Apache-2.0"'
-        required: false
-        type: string
-      reuse-template:
-        description: 'Name of reuse Jinja2 template in .reuse/templates/ (without .jinja2 suffix), defaults to "opensovd"'
-        required: false
-        type: string
-      no-unicode-extensions:
-        description: 'Comma-separated file extensions to check for non-ASCII characters (e.g., ".py,.rs"). Empty string disables the check.'
-        required: false
-        type: string
-      allowed-unicode-chars:
-        description: 'Comma-separated Unicode characters to allow in the no-unicode check. Empty by default.'
+      go-version:
+        description: 'Go version for gitleaks hook'
         required: false
         type: string
 
@@ -56,20 +32,38 @@ permissions:
 
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: false
+          fetch-depth: 0
+      - name: Pin cicd-workflows rev to current SHA
+        shell: bash
+        run: |
+          sed -i "s|rev: CICD_WORKFLOWS_HEAD_SHA|rev: $(git rev-parse HEAD)|" .pre-commit-config.yaml
+          git add .pre-commit-config.yaml
       - name: Run checks
         uses: ./pre-commit-action
         with:
-          rust-nightly-version: ${{ inputs.rust-nightly-version }}
-          python-version: ${{ inputs.python-version }}
-          config-path: ${{ inputs.pre-commit-config-path }}
-          copyright-text: ${{ inputs.copyright-text }}
-          license: ${{ inputs.license }}
-          reuse-template: ${{ inputs.reuse-template }}
-          no-unicode-extensions: ${{ inputs.no-unicode-extensions || '.py,.yml,.toml,.jinja2' }}
-          allowed-unicode-chars: ${{ inputs.allowed-unicode-chars }}
+          rust-toolchain: ${{ inputs.rust-toolchain || 'stable' }}
+          go-version: ${{ inputs.go-version || '1.25' }}
+
+      - name: Validate commit subjects (Conventional Commits)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          fail=0
+          for sha in $(git rev-list "$BASE_SHA..$HEAD_SHA"); do
+            git log -1 --format=%B "$sha" > /tmp/commit-msg
+            if ! prek run --hook-stage commit-msg \
+                --commit-msg-filename /tmp/commit-msg conventional-pre-commit; then
+              echo "::error::Non-conventional commit subject: $(git log -1 --format='%h %s' "$sha")"
+              fail=1
+            fi
+          done
+          exit "$fail"

@@ -13,9 +13,10 @@
 """Compare Cargo.toml [workspace.lints] with shared-lints.toml."""
 
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any
+
+import tomllib
 
 
 def normalize_lint_config(config: Any) -> dict[str, Any]:
@@ -65,17 +66,12 @@ def load_cargo_lints(cargo_toml_path: Path) -> dict[str, dict[str, Any]]:
 
     # Navigate to workspace.lints.clippy if exists, otherwise
     # assume this is a non workspace Cargo.toml and look for lints at the top level
-    if "workspace" in data:
-        workspace = data["workspace"]
-    else:
-        workspace = data
+    workspace = data.get("workspace", data)
 
     lints = workspace.get("lints", {})
     clippy_lints = lints.get("clippy", {})
 
-    return {
-        lint: normalize_lint_config(config) for lint, config in clippy_lints.items()
-    }
+    return {lint: normalize_lint_config(config) for lint, config in clippy_lints.items()}
 
 
 def compare_lints(
@@ -122,9 +118,11 @@ def main():
         print(f"Error: {cargo_toml_path} not found", file=sys.stderr)
         sys.exit(1)
 
-    # Default to shared-lints.toml in the same directory as this script
     script_dir = Path(__file__).parent
     shared_lints_path = script_dir / "shared-lints.toml"
+
+    if not shared_lints_path.exists():
+        shared_lints_path = Path("shared-lints") / "shared-lints.toml"
 
     if not shared_lints_path.exists():
         print(f"Error: {shared_lints_path} not found", file=sys.stderr)
@@ -140,7 +138,8 @@ def main():
     # Report results
     if not missing and not mismatched:
         print(
-            f"[OK] All {len(shared_lints)} shared lints are correctly configured in {cargo_toml_path}"
+            f"[OK] All {len(shared_lints)} shared lints are correctly"
+            f" configured in {cargo_toml_path}"
         )
         return 0
 

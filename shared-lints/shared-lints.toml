@@ -9,7 +9,7 @@
 # https://www.apache.org/licenses/LICENSE-2.0
 
 # enable pedantic
-pedantic = { level = "warn", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
 ## exclude some too pedantic lints for now
 similar_names = "allow"
 
@@ -26,7 +26,7 @@ arithmetic_side_effects = "deny"
 ## lints related to readability of code
 # enforce that references are cloned via eg. `Arc::clone` instead of `.clone()`
 # making it explit that a reference is cloned here and not the underlying data.
-clone_on_ref_ptr = "warn"
+clone_on_ref_ptr = "deny"
 # enforce that the type suffix of a literal is always appended directly
 # eg. 12u8 instead of 12_u8
 separated_literal_suffix = "deny"

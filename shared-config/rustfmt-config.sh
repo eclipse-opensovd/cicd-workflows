@@ -1,5 +1,7 @@
+#!/usr/bin/env bash
+
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+# SPDX-FileCopyrightText: 2026 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -8,9 +10,5 @@
 # terms of the Apache License Version 2.0 which is available at
 # https://www.apache.org/licenses/LICENSE-2.0
 
-.idea/
-.vscode/
-.DS_Store
-.venv/
-uv.lock
-__pycache__/
+# shellcheck disable=SC2034
+RUSTFMT_CONFIG="format_strings=true,group_imports=StdExternalCrate,imports_granularity=Crate,hex_literal_case=Upper"
