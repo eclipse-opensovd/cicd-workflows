@@ -142,9 +142,10 @@ jobs:
           MARKER='<!-- coverage-report -->'
           TOTAL='${{ steps.coverage.outputs.total_coverage }}'
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          SYMBOL="$(printf '\xf0\x9f\x93\x8a')"
           printf '%s\n' \
             "${MARKER}" \
-            '### \uD83D\uDCCA Coverage Report' \
+            "### ${SYMBOL} Coverage Report" \
             '' \
             "**Total line coverage: ${TOTAL}%**" \
             '' \
