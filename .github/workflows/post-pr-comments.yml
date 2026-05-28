@@ -54,8 +54,8 @@ on:
         default: "pr-comment-coverage"
 
 permissions:
-  contents: read
-  pull-requests: write
+  actions: read # needed for gh run download (artifact access)
+  pull-requests: write # needed for posting PR comments
 
 jobs:
   post-comments:
