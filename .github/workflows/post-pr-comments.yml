@@ -1,0 +1,133 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+
+# Post PR comments from artifacts produced by other reusable workflows
+# (e.g. coverage.yml, crap.yml).
+#
+# This workflow is intended to be called from a workflow_run trigger in the
+# consuming repository so that comments can be posted even on fork PRs, where
+# the GITHUB_TOKEN from the pull_request event is read-only.
+#
+# Artifact convention:
+#   Each comment-producing workflow uploads an artifact named
+#   "pr-comment-<name>" containing two files:
+#     - pr_number   : plain text file with the PR number
+#     - body.md     : the full comment markdown; the first line must be an
+#                     HTML comment used as a unique marker (e.g.
+#                     "<!-- coverage-report -->")
+#
+# Example caller (in the consuming repo):
+#
+#   name: Post PR Comments
+#   on:
+#     workflow_run:
+#       workflows: ["Rust CI"]
+#       types: [completed]
+#   jobs:
+#     post:
+#       if: github.event.workflow_run.event == 'pull_request'
+#       uses: eclipse-opensovd/cicd-workflows/.github/workflows/post-pr-comments.yml@main
+#       with:
+#         run-id: ${{ github.event.workflow_run.id }}
+#       permissions:
+#         pull-requests: write
+
+name: Post PR Comments
+
+on:
+  workflow_call:
+    inputs:
+      run-id:
+        description: "Workflow run ID to download comment artifacts from"
+        required: true
+        type: string
+      comment-artifacts:
+        description: "Space-separated list of artifact names to look for and post as PR comments"
+        type: string
+        default: "pr-comment-coverage"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  post-comments:
+    name: Post PR Comments
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download comment artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          for name in ${{ inputs.comment-artifacts }}; do
+            echo "Downloading artifact: ${name}"
+            if gh run download "${{ inputs.run-id }}" --name "${name}" --dir "${name}"; then
+              echo "  -> downloaded successfully"
+            else
+              echo "  -> not found or download failed, skipping"
+            fi
+          done
+
+      - name: Post PR comments
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const artifacts = '${{ inputs.comment-artifacts }}'
+              .split(/\s+/)
+              .filter(Boolean);
+
+            for (const name of artifacts) {
+              const bodyPath = path.join(name, 'body.md');
+              const prPath = path.join(name, 'pr_number');
+
+              if (!fs.existsSync(bodyPath) || !fs.existsSync(prPath)) {
+                console.log(`Skipping '${name}': artifact files not found.`);
+                continue;
+              }
+
+              const body = fs.readFileSync(bodyPath, 'utf8');
+              const prNumber = parseInt(fs.readFileSync(prPath, 'utf8').trim(), 10);
+              const marker = body.split('\n')[0];
+
+              console.log(`Processing '${name}' for PR #${prNumber} (marker: ${marker})`);
+
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+              });
+              const existing = comments.find(c => c.body.includes(marker));
+
+              if (existing) {
+                if (existing.body.trim() === body.trim()) {
+                  console.log(`  -> comment already up to date, skipping.`);
+                  continue;
+                }
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+                console.log(`  -> comment updated.`);
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body,
+                });
+                console.log(`  -> comment created.`);
+              }
+            }
