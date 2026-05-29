@@ -10,6 +10,7 @@
 # terms of the Apache License Version 2.0 which is available at
 # https://www.apache.org/licenses/LICENSE-2.0
 
+# Dependency specification for `uv run`. See: https://peps.python.org/pep-0723
 # /// script
 # dependencies = ["tomli>=1.1.0"]
 # ///
