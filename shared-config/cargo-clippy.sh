@@ -16,8 +16,11 @@ if [ ! -f Cargo.toml ]; then
     exit 0
 fi
 
+# Default: --all-features --all-targets -D warnings
+# Override: pass any args to take full control (e.g. to omit --all-features):
+#   args: ["--all-targets", "--", "-D", "warnings"]
 if [ $# -gt 0 ]; then
     exec cargo clippy --locked "$@"
 else
-    exec cargo clippy --locked --all-targets -- -D warnings
+    exec cargo clippy --locked --all-features --all-targets -- -D warnings
 fi

@@ -22,10 +22,12 @@ on:
         description: 'Rust toolchain to install (e.g. "stable", "nightly-2025-07-14")'
         required: false
         type: string
+        default: 'stable'
       go-version:
         description: 'Go version for gitleaks hook'
         required: false
         type: string
+        default: '1.25'
 
 permissions:
   contents: read
@@ -35,7 +37,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: false
           fetch-depth: 0
@@ -47,8 +49,8 @@ jobs:
       - name: Run checks
         uses: ./pre-commit-action
         with:
-          rust-toolchain: ${{ inputs.rust-toolchain || 'stable' }}
-          go-version: ${{ inputs.go-version || '1.25' }}
+          rust-toolchain: ${{ inputs.rust-toolchain }}
+          go-version: ${{ inputs.go-version }}
 
       - name: Validate commit subjects (Conventional Commits)
         if: github.event_name == 'pull_request'

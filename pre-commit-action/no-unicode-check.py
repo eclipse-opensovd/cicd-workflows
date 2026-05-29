@@ -10,6 +10,8 @@
 # terms of the Apache License Version 2.0 which is available at
 # https://www.apache.org/licenses/LICENSE-2.0
 
+# PEP 723 inline script metadata - evaluated by `uv run` to resolve dependencies.
+# See: https://peps.python.org/pep-0723/
 # /// script
 # dependencies = []
 # ///

@@ -44,7 +44,7 @@
 
 - id: check-hooks
   name: Validate hook configuration
-  entry: pre-commit-action/check-hooks.py
+  entry: pre-commit-action/check-hooks-installed.py
   language: script
   always_run: true
   pass_filenames: false

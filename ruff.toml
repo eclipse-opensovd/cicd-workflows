@@ -10,11 +10,11 @@
 line-length = 100
 
 [lint]
+# Rule documentation: https://docs.astral.sh/ruff/rules/
 select = [
     "E",      # pycodestyle (error)
     "F",      # pyflakes
     "B",      # bugbear
-    "B9",
     "C4",     # flake8-comprehensions
     "SIM",    # flake8-simplify
     "I",      # isort
@@ -22,6 +22,6 @@ select = [
     "PIE",    # flake8-pie
     "PGH",    # pygrep-hooks
     "PYI",    # flake8-pyi
-    "RUF",
+    "RUF",    # Ruff-specific
     "PT",     # flake8-pytest-style
 ]

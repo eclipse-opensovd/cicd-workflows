@@ -17,8 +17,7 @@ if [ ! -f Cargo.toml ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/rustfmt-config.sh"
+RUSTFMT_TOML="$SCRIPT_DIR/.rustfmt.toml"
 
 CHECK_FLAG=""
 if [[ "${1:-}" == "--check" ]]; then
@@ -27,4 +26,4 @@ fi
 
 # shellcheck disable=SC2086
 exec cargo fmt --all $CHECK_FLAG -- \
-    --config "$RUSTFMT_CONFIG"
+    --config-path "$RUSTFMT_TOML"

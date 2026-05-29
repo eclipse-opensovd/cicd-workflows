@@ -72,12 +72,10 @@ runs:
           STDERR_SEVERITY="warning"
         fi
 
-        source "${{ github.action_path }}/../shared-config/rustfmt-config.sh"
-
         FMT_EXIT=0
         cargo fmt -- \
           --emit=checkstyle \
-          --config "$RUSTFMT_CONFIG" \
+          --config-path "${{ github.action_path }}/../shared-config/.rustfmt.toml" \
           2>/tmp/rustfmt_stderr.log \
           | python3 "${{ github.action_path }}/fix-checkstyle-xml.py" \
           | eval "$SEVERITY_TRANSFORM" \

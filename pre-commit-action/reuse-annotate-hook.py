@@ -53,7 +53,7 @@ STYLES_CONFIG = ".reuse/styles.toml"
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _ensure_reuse_assets(license_id: str, template: str) -> None:
+def _ensure_reuse_assets_available(license_id: str, template: str) -> None:
     """Copy REUSE assets from the prek-cached cicd-workflows clone into CWD.
 
     ``reuse annotate`` expects REUSE.toml / LICENSES / templates in the
@@ -302,7 +302,7 @@ def main() -> int:
     if not files:
         return 0
 
-    _ensure_reuse_assets(license_id, template)
+    _ensure_reuse_assets_available(license_id, template)
 
     # Template flag
     tpl_flag: list[str] = []

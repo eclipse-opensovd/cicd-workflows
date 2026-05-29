@@ -14,6 +14,21 @@
 # dependencies = []
 # ///
 
+"""
+Pre-commit hook: flag banner-style comments.
+
+Banner comments (lines filled with repeated characters like ===, ---, ###)
+are banned because:
+1. AI code generators (LLMs) tend to insert decorative banners that add visual
+   noise without conveying information not already expressed by the code structure.
+2. They reduce signal-to-noise ratio in diffs and code review.
+3. Section organization should be achieved through module structure, not ASCII art.
+
+Banned patterns are comment lines where most content consists of repeated
+fill characters (e.g. 30+ repeated '=', '-', or '*'), optionally surrounding
+a short section label.
+"""
+
 import argparse
 import re
 import sys
@@ -21,7 +36,7 @@ import sys
 COMMENT_PREFIXES = ("///", "//!", "//", "/*", "*/", "#!", "#", "*")
 
 
-def build_banner_pattern(banner_chars, min_length):
+def build_banner_patterns(banner_chars, min_length):
     """Return compiled regexes that together match banner-style comment lines.
 
     Two patterns are combined:
@@ -103,7 +118,7 @@ def main():
     if not args.files:
         sys.exit(0)
 
-    patterns = build_banner_pattern(args.banner_chars, args.min_length)
+    patterns = build_banner_patterns(args.banner_chars, args.min_length)
     found_violations = False
 
     for path in args.files:
