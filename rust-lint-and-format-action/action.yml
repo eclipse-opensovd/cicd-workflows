@@ -7,10 +7,8 @@
 # This program and the accompanying materials are made available under the
 # terms of the Apache License Version 2.0 which is available at
 # https://www.apache.org/licenses/LICENSE-2.0
-
 name: 'Format and Clippy'
 description: 'Run rustfmt and clippy checks with reviewdog'
-
 inputs:
   toolchain:
     description: 'Rust toolchain version to use'
@@ -38,15 +36,10 @@ inputs:
     description: 'Whether to enable reviewdog for rustfmt'
     required: false
     default: 'true'
-  error-on-unformatted:
-    description: 'Whether to treat unformatted code as an error in rustfmt'
-    required: false
-    default: 'true'
   reporter:
     description: 'Reporter to use for reviewdog'
     required: false
     default: 'github-pr-review'
-
 runs:
   using: 'composite'
   steps:
@@ -57,12 +50,10 @@ runs:
         components: clippy, rustfmt
         cache-shared-key: ${{ inputs.toolchain }}
         rustflags: ""
-
     - name: Install reviewdog
       uses: reviewdog/action-setup@v1
       with:
         reviewdog_version: latest
-
     - name: Formatting (rustfmt via reviewdog)
       if: ${{ inputs.rustfmt-enable-reviewdog == 'true' }}
       continue-on-error: ${{ inputs.fail-on-format-error == 'false' }}
@@ -81,19 +72,10 @@ runs:
           STDERR_SEVERITY="warning"
         fi
 
-        # rustfmt reports two kinds of issues:
-        #   1. Fixable formatting - emitted as checkstyle XML on stdout (exit 0)
-        #   2. Overflow/unformatted - emitted as diagnostics on stderr (exit 1)
-        # We capture stderr separately so we can merge both into the XML for
-        # reviewdog. Without "|| FMT_EXIT=$?", GHA's default "set -eo pipefail"
-        # would kill the step before reviewdog runs, losing ALL annotations.
         FMT_EXIT=0
         cargo fmt -- \
           --emit=checkstyle \
-          --config error_on_unformatted=${{ inputs.error-on-unformatted }},error_on_line_overflow=true,format_strings=true \
-          --config group_imports=StdExternalCrate \
-          --config imports_granularity=Crate \
-          --config hex_literal_case=Upper \
+          --config-path "${{ github.action_path }}/../shared-config/.rustfmt.toml" \
           2>/tmp/rustfmt_stderr.log \
           | python3 "${{ github.action_path }}/fix-checkstyle-xml.py" \
           | eval "$SEVERITY_TRANSFORM" \
@@ -120,19 +102,11 @@ runs:
         if [ "$FMT_EXIT" -ne 0 ]; then
           exit "$FMT_EXIT"
         fi
-
     - name: Formatting (rustfmt without reviewdog)
       if: ${{ inputs.rustfmt-enable-reviewdog == 'false' }}
       continue-on-error: ${{ inputs.fail-on-format-error == 'false' }}
       shell: bash
-      run: |
-        cargo fmt -- \
-          --check \
-          --config error_on_unformatted=${{ inputs.error-on-unformatted }},error_on_line_overflow=true,format_strings=true \
-          --config group_imports=StdExternalCrate \
-          --config imports_granularity=Crate \
-          --config hex_literal_case=Upper
-
+      run: ${{ github.action_path }}/../shared-config/cargo-fmt.sh --check
     - name: Clippy
       uses: giraffate/clippy-action@v1
       with:

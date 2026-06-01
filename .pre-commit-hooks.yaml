@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+- id: reuse-annotate
+  name: Add missing license headers (REUSE)
+  entry: pre-commit-action/reuse-annotate-hook.py
+  language: script
+  pass_filenames: true
+  exclude: ^(LICENSE|NOTICE|CONTRIBUTORS)$
+  args:
+    - --copyright=The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+    - --license=Apache-2.0
+    - --template=opensovd
+
+- id: no-unicode-check
+  name: No Unicode characters allowed
+  entry: pre-commit-action/no-unicode-check.py
+  language: script
+  pass_filenames: true
+  files: '\.(rs|py|toml|yml|yaml|rst|c|h|kt|kts|sh|proto|fbs|puml|json|xml)$|^Dockerfile$'
+
+- id: no-banner-comment-check
+  name: No banner-style comments allowed
+  entry: pre-commit-action/no-banner-comment-check.py
+  language: script
+  pass_filenames: true
+  files: '\.(rs|py|toml|yml|yaml|c|h|kt|kts|sh|proto|fbs|puml|json|xml)$|^Dockerfile$'
+  args:
+    - --banner-chars==\-#\*/~_+
+    - --min-length=5
+
+- id: validate-cargo-lints
+  name: Validate Cargo Lints
+  entry: shared-lints/check_cargo_lints.py Cargo.toml
+  language: script
+  types: [rust]
+  pass_filenames: false
+
+- id: check-hooks
+  name: Validate hook configuration
+  entry: pre-commit-action/check-hooks-installed.py
+  language: script
+  always_run: true
+  pass_filenames: false
+
+- id: cargo-fmt
+  name: Rust format (shared config)
+  entry: shared-config/cargo-fmt.sh
+  language: script
+  pass_filenames: false
+
+- id: clippy
+  name: Clippy (shared config)
+  entry: shared-config/cargo-clippy.sh
+  language: script
+  pass_filenames: false
