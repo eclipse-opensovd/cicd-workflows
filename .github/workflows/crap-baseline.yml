@@ -1,0 +1,133 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+
+# Update the CRAP baseline after a successful CI run on the main branch.
+#
+# This workflow is intended to be called from a workflow_run trigger in the
+# consuming repository. It downloads the coverage LCOV artifact from the
+# triggering run, generates a new CRAP baseline JSON, and pushes it to a
+# dedicated branch.
+#
+# Example caller (in the consuming repo):
+#
+#   name: Update CRAP baseline
+#   on:
+#     workflow_run:
+#       workflows: ["Rust CI"]
+#       types: [completed]
+#       branches: [main]
+#   jobs:
+#     update:
+#       if: github.event.workflow_run.conclusion == 'success'
+#       uses: eclipse-opensovd/cicd-workflows/.github/workflows/crap-baseline.yml@main
+#       with:
+#         run-id: ${{ github.event.workflow_run.id }}
+#       permissions:
+#         contents: write
+#         actions: read
+
+name: Update CRAP Baseline
+
+on:
+  workflow_call:
+    inputs:
+      run-id:
+        description: "Workflow run ID to download the coverage artifact from"
+        required: true
+        type: string
+      rust-version:
+        description: "Rust toolchain version"
+        type: string
+        default: "1.88.0"
+      cargo-crap-version:
+        description: "crates.io version of cargo-crap (ignored if cargo-crap-git-url is set)"
+        type: string
+        default: "0.2.0"
+      cargo-crap-git-url:
+        description: "Install cargo-crap from this git URL instead of crates.io"
+        type: string
+        default: ""
+      cargo-crap-git-rev:
+        description: "Git revision to install (used with cargo-crap-git-url)"
+        type: string
+        default: ""
+      coverage-artifact:
+        description: "Name of the coverage LCOV artifact to download"
+        type: string
+        default: "coverage-lcov"
+      lcov-file:
+        description: "Name of the LCOV file inside the coverage artifact"
+        type: string
+        default: "lcov.info"
+      baseline-branch:
+        description: "Branch to push the baseline JSON to"
+        type: string
+        default: "crap-baseline"
+      baseline-file:
+        description: "File path for the baseline JSON within the branch"
+        type: string
+        default: "baseline.json"
+
+permissions:
+  contents: write # needed to push to the baseline branch
+  actions: read # needed to download artifacts from the triggering run
+
+jobs:
+  update-baseline:
+    name: Update CRAP Baseline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ inputs.rust-version }}
+
+      - name: Install cargo-crap
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.cargo-crap-git-url }}" ]; then
+            cargo install --git "${{ inputs.cargo-crap-git-url }}" --rev "${{ inputs.cargo-crap-git-rev }}" --locked
+          else
+            cargo install --locked --version "${{ inputs.cargo-crap-version }}" cargo-crap
+          fi
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.coverage-artifact }}
+          run-id: ${{ inputs.run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Generate baseline
+        run: |
+          cargo crap \
+            --lcov "${{ inputs.lcov-file }}" \
+            --workspace \
+            --format json \
+            --output /tmp/baseline.json
+
+      - name: Push baseline to branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${{ inputs.baseline-branch }}"
+          git checkout "${{ inputs.baseline-branch }}"
+          cp /tmp/baseline.json "${{ inputs.baseline-file }}"
+          git add "${{ inputs.baseline-file }}"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update crap baseline"
+            git push origin "${{ inputs.baseline-branch }}"
+          fi

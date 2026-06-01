@@ -51,7 +51,7 @@ on:
       comment-artifacts:
         description: "Space-separated list of artifact names to look for and post as PR comments"
         type: string
-        default: "pr-comment-coverage"
+        default: "pr-comment-coverage pr-comment-crap"
 
 permissions:
   actions: read # needed for gh run download (artifact access)
