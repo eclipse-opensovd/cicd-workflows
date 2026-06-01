@@ -1,0 +1,177 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+
+# CRAP (Change Risk Anti-Patterns) analysis for pull requests.
+#
+# Runs cargo-crap against a baseline to detect CRAP score regressions.
+# Requires the coverage-lcov artifact from a preceding coverage job
+# (produced by coverage.yml) and a baseline JSON on a dedicated branch.
+#
+# When post-pr-comment is enabled, the comment body is uploaded as a
+# "pr-comment-crap" artifact following the convention described in
+# post-pr-comments.yml so that fork PRs can also receive comments via
+# a workflow_run trigger.
+
+name: CRAP
+
+on:
+  workflow_call:
+    inputs:
+      rust-version:
+        description: "Rust toolchain version"
+        type: string
+        default: "1.88.0"
+      cargo-crap-version:
+        description: "crates.io version of cargo-crap (ignored if cargo-crap-git-url is set)"
+        type: string
+        default: "0.2.0"
+      cargo-crap-git-url:
+        description: "Install cargo-crap from this git URL instead of crates.io"
+        type: string
+        default: ""
+      cargo-crap-git-rev:
+        description: "Git revision to install (used with cargo-crap-git-url)"
+        type: string
+        default: ""
+      coverage-artifact:
+        description: "Name of the coverage LCOV artifact to download"
+        type: string
+        default: "coverage-lcov"
+      lcov-file:
+        description: "Name of the LCOV file inside the coverage artifact"
+        type: string
+        default: "lcov.info"
+      baseline-branch:
+        description: "Git branch containing the CRAP baseline JSON"
+        type: string
+        default: "crap-baseline"
+      baseline-file:
+        description: "Path to the baseline JSON file within the baseline branch"
+        type: string
+        default: "baseline.json"
+      post-pr-comment:
+        description: >-
+          Generate a CRAP PR comment and upload it as the 'pr-comment-crap' artifact. For non-fork PRs the comment is also posted directly (requires pull-requests: write in the caller). Fork PRs can be handled by a workflow_run workflow that calls post-pr-comments.yml.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  crap:
+    name: CRAP Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ inputs.rust-version }}
+
+      - name: Install cargo-crap
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.cargo-crap-git-url }}" ]; then
+            cargo install --git "${{ inputs.cargo-crap-git-url }}" --rev "${{ inputs.cargo-crap-git-rev }}" --locked
+          else
+            cargo install --locked --version "${{ inputs.cargo-crap-version }}" cargo-crap
+          fi
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.coverage-artifact }}
+
+      - name: Fetch baseline
+        shell: bash
+        run: |
+          git fetch origin "${{ inputs.baseline-branch }}"
+          git show "origin/${{ inputs.baseline-branch }}:${{ inputs.baseline-file }}" > baseline.json
+
+      - name: Regression check
+        run: |
+          cargo crap \
+            --lcov "${{ inputs.lcov-file }}" \
+            --workspace \
+            --baseline baseline.json \
+            --fail-regression
+
+      - name: Generate PR comment
+        if: ${{ always() && inputs.post-pr-comment && github.event_name == 'pull_request' }}
+        run: |
+          cargo crap \
+            --lcov "${{ inputs.lcov-file }}" \
+            --workspace \
+            --baseline baseline.json \
+            --format pr-comment \
+            --commit-ref "${{ github.event.pull_request.head.sha }}" \
+            --output crap-comment.md || true
+
+      - name: Prepare CRAP comment artifact
+        if: ${{ always() && inputs.post-pr-comment && github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          if [ ! -f crap-comment.md ]; then
+            echo "No CRAP comment generated, skipping artifact."
+            exit 0
+          fi
+          mkdir -p pr-comment-crap
+          echo "${{ github.event.number }}" > pr-comment-crap/pr_number
+          cp crap-comment.md pr-comment-crap/body.md
+
+      - name: Upload CRAP comment artifact
+        if: ${{ always() && inputs.post-pr-comment && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-comment-crap
+          path: pr-comment-crap/
+          if-no-files-found: ignore
+
+      # Post directly for non-fork PRs (instant feedback).
+      # Fork PRs lack write permissions; they are handled by a separate
+      # workflow_run workflow that calls post-pr-comments.yml.
+      - name: Post CRAP comment on PR
+        if: >-
+          always() && inputs.post-pr-comment && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('pr-comment-crap/body.md')) return;
+            const body = fs.readFileSync('pr-comment-crap/body.md', 'utf8');
+            const marker = '<!-- cargo-crap-report -->';
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
