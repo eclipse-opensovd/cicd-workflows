@@ -12,7 +12,8 @@
 
 # Dependency specification for `uv run`. See: https://peps.python.org/pep-0723
 # /// script
-# dependencies = []
+# dependencies = ["pyyaml"]
+# requires-python = ">=3.11"
 # ///
 
 from __future__ import annotations
@@ -20,6 +21,9 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+
+import tomllib
+import yaml
 
 REQUIRED_HOOKS: list[dict] = [
     {
@@ -168,24 +172,28 @@ REQUIRED_CONFIGS: list[dict] = [
         "description": "yamlfmt configuration",
         "canonical": _SHARED_CONFIG / ".yamlfmt",
         "rust_only": False,
+        "check_mode": "yaml_superset",
     },
     {
         "path": ".markdownlint.yaml",
         "description": "markdownlint configuration",
         "canonical": _SHARED_CONFIG / ".markdownlint.yaml",
         "rust_only": False,
+        "check_mode": "yaml_superset",
     },
     {
         "path": ".rustfmt.toml",
         "description": "rustfmt configuration",
         "canonical": _SHARED_CONFIG / ".rustfmt.toml",
         "rust_only": True,
+        "check_mode": "toml_superset",
     },
     {
         "path": "ruff.toml",
         "description": "ruff configuration",
         "canonical": _SHARED_CONFIG / "ruff.toml",
         "rust_only": False,
+        "check_mode": "toml_superset",
     },
 ]
 
@@ -256,6 +264,24 @@ def check_hooks(
                 )
 
 
+def _is_superset(canonical: dict, actual: dict, path: str = "") -> list[str]:
+    """Return a list of violation messages where actual does not cover canonical."""
+    issues: list[str] = []
+    for key, expected in canonical.items():
+        full_key = f"{path}.{key}" if path else str(key)
+        if key not in actual:
+            issues.append(f"missing key {full_key!r}")
+        elif isinstance(expected, dict):
+            if not isinstance(actual[key], dict):
+                actual_type = type(actual[key]).__name__
+                issues.append(f"key {full_key!r} must be a mapping, got {actual_type}")
+            else:
+                issues.extend(_is_superset(expected, actual[key], full_key))
+        elif actual[key] != expected:
+            issues.append(f"key {full_key!r}: expected {expected!r}, got {actual[key]!r}")
+    return issues
+
+
 def check_configs(failures: list[str], has_rust: bool) -> None:
     for cfg in REQUIRED_CONFIGS:
         if cfg["rust_only"] and not has_rust:
@@ -264,21 +290,43 @@ def check_configs(failures: list[str], has_rust: bool) -> None:
         if not canonical_path.exists():
             failures.append(f"Canonical config not found in cicd-workflows: {canonical_path}")
             continue
-        canonical = canonical_path.read_text()
 
         p = Path(cfg["path"])
         if not p.exists():
             failures.append(f"Missing config file: {cfg['path']} ({cfg['description']})")
             continue
-        actual = p.read_text()
-        if actual != canonical:
-            failures.append(
-                f"Config file {cfg['path']} does not match canonical content.\n"
-                "  Expected:\n"
-                + "".join(f"    {line}\n" for line in canonical.splitlines())
-                + "  Got:\n"
-                + "".join(f"    {line}\n" for line in actual.splitlines())
-            )
+
+        check_mode = cfg.get("check_mode", "exact")
+
+        if check_mode == "yaml_superset":
+            canonical_data = yaml.safe_load(canonical_path.read_text()) or {}
+            actual_data = yaml.safe_load(p.read_text()) or {}
+            issues = _is_superset(canonical_data, actual_data)
+            if issues:
+                failures.append(
+                    f"Config file {cfg['path']} is missing required settings:\n"
+                    + "".join(f"  - {issue}\n" for issue in issues)
+                )
+        elif check_mode == "toml_superset":
+            canonical_data = tomllib.loads(canonical_path.read_text())
+            actual_data = tomllib.loads(p.read_text())
+            issues = _is_superset(canonical_data, actual_data)
+            if issues:
+                failures.append(
+                    f"Config file {cfg['path']} is missing required settings:\n"
+                    + "".join(f"  - {issue}\n" for issue in issues)
+                )
+        else:
+            canonical = canonical_path.read_text()
+            actual = p.read_text()
+            if actual != canonical:
+                failures.append(
+                    f"Config file {cfg['path']} does not match canonical content.\n"
+                    "  Expected:\n"
+                    + "".join(f"    {line}\n" for line in canonical.splitlines())
+                    + "  Got:\n"
+                    + "".join(f"    {line}\n" for line in actual.splitlines())
+                )
 
 
 def main() -> int:
@@ -323,7 +371,7 @@ def main() -> int:
         return 1
 
     print(f"[OK] All {total_hooks} required hooks are correctly configured in {config_path}")
-    print(f"[OK] All {total_configs} required config files match canonical content")
+    print(f"[OK] All {total_configs} required config files contain the required settings")
     return 0
 
 
