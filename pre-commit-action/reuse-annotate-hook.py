@@ -198,14 +198,16 @@ def _has_stale_copyright_year(filepath: str) -> bool:
     return False
 
 
-def has_valid_spdx_header(filepath: str) -> bool:
+def has_valid_spdx_header(filepath: str, copyright_text: str | None = None) -> bool:
     """Check whether a file already has valid SPDX headers.
 
     A file is considered to have a valid header if it contains at least one
-    SPDX-License-Identifier line AND at least one SPDX-FileCopyrightText line.
-    Such files should not be re-annotated to avoid overwriting a different but
-    perfectly valid license/copyright (e.g. a vendor file that is Apache-2.0
-    with a different copyright holder).
+    SPDX-License-Identifier line AND at least one SPDX-FileCopyrightText line
+    with the expected copyright holder.
+
+    If ``copyright_text`` is given, a file whose SPDX-FileCopyrightText lines
+    do not include that text is treated as *invalid* so that the wrong holder
+    can be corrected by the caller (via fix_wrong_copyright + reuse annotate).
 
     Also checks the .license sidecar file if it exists (e.g. for binary files
     whose headers live in foo.bin.license).
@@ -220,16 +222,24 @@ def has_valid_spdx_header(filepath: str) -> bool:
             content = path.read_text(errors="replace")
         except OSError:
             continue
-        if "SPDX-License-Identifier" in content and "SPDX-FileCopyrightText" in content:
+        if "SPDX-License-Identifier" not in content or "SPDX-FileCopyrightText" not in content:
+            continue
+        # If no expected copyright is given, presence of any holder is fine.
+        if copyright_text is None:
             return True
+        # Require the correct copyright holder to be present.
+        for line in content.splitlines():
+            if "SPDX-FileCopyrightText" in line and copyright_text in line:
+                return True
 
     return False
 
 
 def fix_wrong_copyright(filepath: str, copyright_text: str) -> None:
-    """Remove SPDX-FileCopyrightText lines with wrong copyright text.
+    """Remove SPDX-FileCopyrightText lines whose holder does not match copyright_text.
 
-    This prevents reuse annotate from appending a second copyright line.
+    This prevents reuse annotate from appending a second copyright line when the
+    file already contains a different (wrong) copyright holder.
     """
     path = Path(filepath)
     try:
@@ -239,16 +249,14 @@ def fix_wrong_copyright(filepath: str, copyright_text: str) -> None:
 
     if "SPDX-FileCopyrightText" not in content:
         return
-    if "SPDX-FileCopyrightText" in content and copyright_text in content:
-        # Check if the correct copyright already exists
-        for line in content.splitlines():
-            if "SPDX-FileCopyrightText" in line and copyright_text in line:
-                return
 
-    # Remove all SPDX-FileCopyrightText lines (wrong copyright)
+    # Remove lines that carry a copyright holder other than the expected one.
     lines = content.splitlines(keepends=True)
-    lines = [line for line in lines if "SPDX-FileCopyrightText" not in line]
-    path.write_text("".join(lines))
+    filtered = [
+        line for line in lines if "SPDX-FileCopyrightText" not in line or copyright_text in line
+    ]
+    if filtered != lines:
+        path.write_text("".join(filtered))
 
 
 def should_ignore(filepath: str, ignore_patterns: list[str]) -> bool:
@@ -324,10 +332,11 @@ def main() -> int:
         if filepath.startswith("LICENSES/") or "/LICENSES/" in filepath:
             continue
 
-        # Skip files that already have valid SPDX headers.
-        # This avoids overwriting existing (possibly different but valid)
-        # license/copyright information with the template.
-        if has_valid_spdx_header(filepath):
+        # Skip files that already have valid SPDX headers with the correct
+        # copyright holder.  Files that have SPDX headers but a *wrong*
+        # copyright holder fall through so fix_wrong_copyright + reuse annotate
+        # can correct them.
+        if has_valid_spdx_header(filepath, copyright_text):
             if _is_new_file(filepath):
                 if check_mode:
                     if _has_stale_copyright_year(filepath):
@@ -337,7 +346,11 @@ def main() -> int:
             continue
 
         if check_mode:
-            errors.append(f"{filepath}: missing SPDX license header")
+            # Distinguish between a completely missing header and a wrong holder.
+            if has_valid_spdx_header(filepath):
+                errors.append(f"{filepath}: copyright holder is not '{copyright_text}'")
+            else:
+                errors.append(f"{filepath}: missing SPDX license header")
             continue
 
         # Resolve comment style
