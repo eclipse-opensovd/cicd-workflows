@@ -40,7 +40,7 @@ jobs:
     env:
       MIRIFLAGS: ${{ inputs.miri-flags }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1

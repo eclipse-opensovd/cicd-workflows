@@ -46,7 +46,7 @@ jobs:
     name: Cargo Build & Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -64,7 +64,7 @@ jobs:
     if: ${{ inputs.bazel-enabled }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Bazel
         uses: bazel-contrib/setup-bazel@0.14.0
