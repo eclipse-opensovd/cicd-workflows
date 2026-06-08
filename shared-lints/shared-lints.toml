@@ -23,6 +23,10 @@ unwrap_used = "deny"
 # either checked or explicit versions of the operations. eg. `.checked_add(...)`
 # or `.saturating_sub(...)` to avoid unexpected runtime behavior or panics.
 arithmetic_side_effects = "deny"
+# disallow direct byte/range slicing of `&str` (e.g. `s[..n]`) which can panic
+# when a range falls inside a multi-byte UTF-8 codepoint. Prefer
+# `s.get(..n)`, `s.split_at_checked(...)`, or char-based iteration.
+string_slice = "deny"
 ## lints related to readability of code
 # enforce that references are cloned via eg. `Arc::clone` instead of `.clone()`
 # making it explit that a reference is cloned here and not the underlying data.
