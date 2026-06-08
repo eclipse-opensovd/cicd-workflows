@@ -138,7 +138,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: false
 
@@ -197,7 +197,7 @@ jobs:
 
       - name: Set up Node.js
         if: inputs.package-manager == 'npm'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
           cache: npm
@@ -233,7 +233,7 @@ jobs:
       contents: write
     steps:
       - name: Rename assets and generate latest.json
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           APP_BINARY_NAME: ${{ inputs.app-binary-name }}
         with:
