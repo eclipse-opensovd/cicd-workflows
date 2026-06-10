@@ -75,7 +75,7 @@ on:
         default: false
 
       build-linux:
-        description: "Include the Linux (ubuntu-latest) build (default: true)"
+        description: "Include the Linux (ubuntu-24.04) build (default: true)"
         type: boolean
         default: true
 
@@ -120,7 +120,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: ubuntu-latest
+          - platform: ubuntu-24.04
             args: ""
             rust_targets: ""
             enabled: ${{ inputs.build-linux }}
@@ -177,7 +177,7 @@ jobs:
           targets: ${{ matrix.rust_targets }}
 
       - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-latest'
+        if: matrix.platform == 'ubuntu-24.04'
         shell: bash
         run: |
           sudo apt-get update
@@ -228,7 +228,7 @@ jobs:
   merge-updater-json:
     needs:
       - build-tauri
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
