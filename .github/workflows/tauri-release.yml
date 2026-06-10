@@ -75,12 +75,12 @@ on:
         type: boolean
         default: false
 
-      build-ubuntu-24-04:
-        description: "Include the Linux (ubuntu-24.04) build (default: true)"
-        type: boolean
-        default: true
+
+        
 
       build-ubuntu-26-04:
+
+      build-linux:
         description: "Include the Linux (ubuntu-26.04) build (default: true)"
         type: boolean
         default: true
@@ -122,9 +122,32 @@ jobs:
   create-release:
     permissions:
       contents: write
+<<<<<<< HEAD
     runs-on: ubuntu-26.04
     outputs:
       release-id: ${{ steps.create.outputs.releaseId }}
+=======
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-26.04
+            args: ""
+            rust_targets: ""
+            enabled: ${{ inputs.build-linux }}
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+            rust_targets: "aarch64-apple-darwin"
+            enabled: ${{ inputs.build-macos-arm }}
+          - platform: windows-latest
+            args: ""
+            rust_targets: ""
+            enabled: ${{ inputs.build-windows }}
+
+    runs-on: ${{ matrix.platform }}
+    if: ${{ matrix.enabled }}
+
+>>>>>>> a2a8fd0 (chore: pin all workflows to ubuntu-24.04 instead of ubuntu-latest)
     steps:
       - name: Create GitHub release
         id: create
@@ -146,6 +169,7 @@ jobs:
             });
             core.setOutput('releaseId', String(release.id));
 
+<<<<<<< HEAD
   build-ubuntu-24-04:
     needs: create-release
     if: inputs.build-ubuntu-24-04 != false
@@ -155,6 +179,58 @@ jobs:
     steps:
       - name: Set up Tauri build environment
         uses: eclipse-opensovd/cicd-workflows/.github/actions/tauri-build-setup@6939750edbd364cee103a4b176b67b012c0e2c19
+=======
+      - name: Inject version from tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          python3 - << 'EOF'
+          import os, re, json
+
+          v = os.environ.get("VERSION") or os.environ.get("GITHUB_REF_NAME", "").lstrip("v")
+          tauri_conf = "${{ inputs.tauri-conf-path }}"
+          cargo_toml = "${{ inputs.cargo-toml-path }}"
+
+          with open(tauri_conf) as f:
+              cfg = json.load(f)
+          cfg["version"] = v
+          with open(tauri_conf, "w") as f:
+              json.dump(cfg, f, indent=2)
+              f.write("\n")
+
+          with open(cargo_toml) as f:
+              text = f.read()
+          # Replace version only in [package] section (first occurrence)
+          text = re.sub(r'^version = "[^"]+"', f'version = "{v}"', text, count=1, flags=re.MULTILINE)
+          with open(cargo_toml, "w") as f:
+              f.write(text)
+          EOF
+        env:
+          VERSION: ${{ github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ inputs.rust-version }}
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-26.04'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            libssl-dev \
+            libxdo-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Set up Bun
+        if: inputs.package-manager == 'bun'
+        uses: oven-sh/setup-bun@v2
+>>>>>>> a2a8fd0 (chore: pin all workflows to ubuntu-24.04 instead of ubuntu-latest)
         with:
           tauri-conf-path: ${{ inputs.tauri-conf-path }}
           cargo-toml-path: ${{ inputs.cargo-toml-path }}
@@ -318,6 +394,7 @@ jobs:
 
   merge-updater-json:
     needs:
+<<<<<<< HEAD
       - create-release
       - build-ubuntu-24-04
       - build-ubuntu-26-04
@@ -327,6 +404,9 @@ jobs:
       always() &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
+=======
+      - build-tauri
+>>>>>>> a2a8fd0 (chore: pin all workflows to ubuntu-24.04 instead of ubuntu-latest)
     runs-on: ubuntu-26.04
     permissions:
       contents: write
