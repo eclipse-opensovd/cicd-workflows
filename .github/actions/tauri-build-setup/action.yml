@@ -1,0 +1,106 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+
+name: Tauri build setup
+description: >
+  Shared setup steps for every Tauri release build job: checkout, version injection, Rust toolchain, optional Linux system dependencies, and frontend tooling (Bun or npm). #magic___^_^___line
+inputs:
+  tauri-conf-path:
+    description: "Relative path to tauri.conf.json"
+    required: true
+  cargo-toml-path:
+    description: "Relative path to Cargo.toml"
+    required: true
+  rust-version:
+    description: "Rust toolchain version"
+    required: false
+    default: "stable"
+  rust-target:
+    description: "Additional Rust target to install (e.g. aarch64-apple-darwin). Leave empty to skip."
+    required: false
+    default: ""
+  install-linux-deps:
+    description: "Install Linux (apt-get) system dependencies required by Tauri. Set to 'true' on Ubuntu runners."
+    required: false
+    default: "false"
+  package-manager:
+    description: "Frontend package manager: 'bun' or 'npm'"
+    required: false
+    default: "bun"
+  bun-version:
+    description: "Bun version to install when package-manager is 'bun'"
+    required: false
+    default: "latest"
+  node-version:
+    description: "Node.js version to install when package-manager is 'npm'"
+    required: false
+    default: "22"
+  frontend-dir:
+    description: "Directory that contains package.json"
+    required: false
+    default: "frontend"
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        submodules: false
+
+    - name: Inject version from tag
+      uses: eclipse-opensovd/cicd-workflows/.github/actions/inject-version@fix-tauri-release
+      with:
+        tauri-conf-path: ${{ inputs.tauri-conf-path }}
+        cargo-toml-path: ${{ inputs.cargo-toml-path }}
+
+    - name: Install Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: ${{ inputs.rust-version }}
+        target: ${{ inputs.rust-target }}
+
+    - name: Install Linux system dependencies
+      if: inputs.install-linux-deps == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libwebkit2gtk-4.1-dev \
+          build-essential \
+          libssl-dev \
+          libxdo-dev \
+          libayatana-appindicator3-dev \
+          librsvg2-dev
+
+    - name: Set up Bun
+      if: inputs.package-manager == 'bun'
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Set up Node.js
+      if: inputs.package-manager == 'npm'
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+
+    - name: Install frontend dependencies (bun)
+      if: inputs.package-manager == 'bun'
+      shell: bash
+      run: bun install
+      working-directory: ${{ inputs.frontend-dir }}
+
+    - name: Install frontend dependencies (npm)
+      if: inputs.package-manager == 'npm'
+      shell: bash
+      run: npm ci
+      working-directory: ${{ inputs.frontend-dir }}

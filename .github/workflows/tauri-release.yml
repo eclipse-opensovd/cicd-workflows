@@ -14,15 +14,20 @@ on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc.*'
   workflow_call:
     inputs:
       app-name:
         description: >
-          Human-readable release name prefix, e.g. "MDD UI". Used in releaseName: "<app-name> ${{ github.ref_name }}".
+          Human-readable release name prefix, e.g. "MDD UI". Used in releaseName: "<app-name> <tag>".
         type: string
         required: true
 
       app-binary-name:
+        description: >
+          Binary name of the app, e.g. "mdd-ui". Required for asset renaming (adds OS/Ubuntu-version suffix to .deb and other bundle filenames). If omitted, the rename step will fail.
+        type: string
+        required: true
 
       tauri-conf-path:
         description: "Relative path to tauri.conf.json (default: tauri.conf.json)"
@@ -59,23 +64,24 @@ on:
         type: string
         default: "stable"
 
-      tauri-action-version:
-        description: "Version of tauri-apps/tauri-action to use (default: v0)"
-        type: string
-        default: "v0"
-
       release-draft:
         description: "Publish release as a draft (default: false)"
         type: boolean
         default: false
 
       prerelease:
-        description: "Mark release as a pre-release (default: false)"
+        description: >
+          Mark release as a pre-release (default: false). Tags containing '-rc', '-alpha', or '-beta' (e.g. v1.2.3-rc.1) are always treated as pre-releases regardless of this input.
         type: boolean
         default: false
 
-      build-linux:
+      build-ubuntu-24-04:
         description: "Include the Linux (ubuntu-24.04) build (default: true)"
+        type: boolean
+        default: true
+
+      build-ubuntu-26-04:
+        description: "Include the Linux (ubuntu-26.04) build (default: true)"
         type: boolean
         default: true
 
@@ -113,122 +119,215 @@ permissions:
   contents: write
 
 jobs:
-  build-tauri:
+  create-release:
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu-24.04
-            args: ""
-            rust_targets: ""
-            enabled: ${{ inputs.build-linux }}
-          - platform: macos-latest
-            args: "--target aarch64-apple-darwin"
-            rust_targets: "aarch64-apple-darwin"
-            enabled: ${{ inputs.build-macos-arm }}
-          - platform: windows-latest
-            args: ""
-            rust_targets: ""
-            enabled: ${{ inputs.build-windows }}
-
-    runs-on: ${{ matrix.platform }}
-    if: ${{ matrix.enabled }}
-
+    runs-on: ubuntu-26.04
+    outputs:
+      release-id: ${{ steps.create.outputs.releaseId }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - name: Create GitHub release
+        id: create
+        uses: actions/github-script@v9
         with:
-          submodules: false
+          script: |
+            const tagName = context.ref.replace('refs/tags/', '');
+            // A tag containing '-rc' (e.g. v1.2.3-rc.1) is always a pre-release,
+            // regardless of the caller-supplied input.
+            const isPrerelease = ${{ inputs.prerelease }} || /-(rc|alpha|beta)[.\d]*$/i.test(tagName);
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              tag_name: tagName,
+              name: "${{ inputs.app-name }} " + tagName,
+              draft: ${{ inputs.release-draft }},
+              prerelease: isPrerelease,
+              generate_release_notes: false,
+            });
+            core.setOutput('releaseId', String(release.id));
 
-      - name: Inject version from tag
-        shell: bash
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          python3 - << 'EOF'
-          import os, re, json
-
-          v = os.environ.get("VERSION") or os.environ.get("GITHUB_REF_NAME", "").lstrip("v")
-          tauri_conf = "${{ inputs.tauri-conf-path }}"
-          cargo_toml = "${{ inputs.cargo-toml-path }}"
-
-          with open(tauri_conf) as f:
-              cfg = json.load(f)
-          cfg["version"] = v
-          with open(tauri_conf, "w") as f:
-              json.dump(cfg, f, indent=2)
-              f.write("\n")
-
-          with open(cargo_toml) as f:
-              text = f.read()
-          # Replace version only in [package] section (first occurrence)
-          text = re.sub(r'^version = "[^"]+"', f'version = "{v}"', text, count=1, flags=re.MULTILINE)
-          with open(cargo_toml, "w") as f:
-              f.write(text)
-          EOF
-        env:
-          VERSION: ${{ github.ref_name }}
-
-      - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+  build-ubuntu-24-04:
+    needs: create-release
+    if: inputs.build-ubuntu-24-04 != false
+    permissions:
+      contents: write
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Set up Tauri build environment
+        uses: eclipse-opensovd/cicd-workflows/.github/actions/tauri-build-setup@fix-tauri-release
         with:
-          toolchain: ${{ inputs.rust-version }}
-          targets: ${{ matrix.rust_targets }}
-
-      - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-24.04'
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            libssl-dev \
-            libxdo-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
-
-      - name: Set up Bun
-        if: inputs.package-manager == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
+          tauri-conf-path: ${{ inputs.tauri-conf-path }}
+          cargo-toml-path: ${{ inputs.cargo-toml-path }}
+          rust-version: ${{ inputs.rust-version }}
+          install-linux-deps: "true"
+          package-manager: ${{ inputs.package-manager }}
           bun-version: ${{ inputs.bun-version }}
-
-      - name: Set up Node.js
-        if: inputs.package-manager == 'npm'
-        uses: actions/setup-node@v6
-        with:
           node-version: ${{ inputs.node-version }}
-          cache: npm
-
-      - name: Install frontend dependencies (bun)
-        if: inputs.package-manager == 'bun'
-        run: bun install
-        working-directory: ${{ inputs.frontend-dir }}
-
-      - name: Install frontend dependencies (npm)
-        if: inputs.package-manager == 'npm'
-        run: npm ci
-        working-directory: ${{ inputs.frontend-dir }}
+          frontend-dir: ${{ inputs.frontend-dir }}
 
       - name: Build and upload Tauri bundles
-        uses: tauri-apps/tauri-action@${{ inputs.tauri-action-version }}
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "${{ inputs.app-name }} ${{ github.ref_name }}"
-          releaseDraft: ${{ inputs.release-draft }}
-          prerelease: ${{ inputs.prerelease }}
-          args: ${{ matrix.args }}
+          releaseId: ${{ needs.create-release.outputs.release-id }}
+          args: "--bundles deb"
+
+      - name: Rename deb asset to ubuntu2404 name
+        uses: actions/github-script@v9
+        env:
+          APP_BINARY_NAME: ${{ inputs.app-binary-name }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release-id }}
+        with:
+          script: |
+            const bin       = process.env.APP_BINARY_NAME;
+            const releaseId = parseInt(process.env.RELEASE_ID, 10);
+            const owner     = context.repo.owner;
+            const repo      = context.repo.repo;
+            const { data: assets } = await github.rest.repos.listReleaseAssets({
+              owner, repo, release_id: releaseId, per_page: 100,
+            });
+            const re = new RegExp(`^${bin}_([\\d.]+)_amd64\\.deb$`, 'i');
+            const deb = assets.find(a => re.test(a.name));
+            if (!deb) { core.setFailed('ubuntu-24.04 .deb asset not found'); return; }
+            const version = deb.name.match(re)[1];
+            const newName = `${bin}_${version}_linux_ubuntu2404_amd64.deb`;
+            await github.rest.repos.updateReleaseAsset({ owner, repo, asset_id: deb.id, name: newName });
+            core.info(`Renamed: ${deb.name} -> ${newName}`);
+            const sig = assets.find(a => a.name === `${deb.name}.sig`);
+            if (sig) {
+              await github.rest.repos.updateReleaseAsset({ owner, repo, asset_id: sig.id, name: `${newName}.sig` });
+              core.info(`Renamed: ${sig.name} -> ${newName}.sig`);
+            }
+
+  build-ubuntu-26-04:
+    needs: create-release
+    if: inputs.build-ubuntu-26-04 != false
+    permissions:
+      contents: write
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Set up Tauri build environment
+        uses: eclipse-opensovd/cicd-workflows/.github/actions/tauri-build-setup@fix-tauri-release
+        with:
+          tauri-conf-path: ${{ inputs.tauri-conf-path }}
+          cargo-toml-path: ${{ inputs.cargo-toml-path }}
+          rust-version: ${{ inputs.rust-version }}
+          install-linux-deps: "true"
+          package-manager: ${{ inputs.package-manager }}
+          bun-version: ${{ inputs.bun-version }}
+          node-version: ${{ inputs.node-version }}
+          frontend-dir: ${{ inputs.frontend-dir }}
+
+      - name: Build and upload Tauri bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.release-id }}
+          args: "--bundles appimage,deb"
+
+      - name: Rename deb asset to ubuntu2604 name
+        uses: actions/github-script@v9
+        env:
+          APP_BINARY_NAME: ${{ inputs.app-binary-name }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release-id }}
+        with:
+          script: |
+            const bin       = process.env.APP_BINARY_NAME;
+            const releaseId = parseInt(process.env.RELEASE_ID, 10);
+            const owner     = context.repo.owner;
+            const repo      = context.repo.repo;
+            const { data: assets } = await github.rest.repos.listReleaseAssets({
+              owner, repo, release_id: releaseId, per_page: 100,
+            });
+            // Match either the plain name or the .1-suffixed collision variant
+            const re = new RegExp(`^${bin}_([\\d.]+)_amd64(\\.1)?\\.deb$`, 'i');
+            const deb = assets.find(a => re.test(a.name));
+            if (!deb) { core.setFailed('ubuntu-26.04 .deb asset not found'); return; }
+            const version = deb.name.match(re)[1];
+            const newName = `${bin}_${version}_linux_ubuntu2604_amd64.deb`;
+            await github.rest.repos.updateReleaseAsset({ owner, repo, asset_id: deb.id, name: newName });
+            core.info(`Renamed: ${deb.name} -> ${newName}`);
+            const sig = assets.find(a => a.name === `${deb.name}.sig`);
+            if (sig) {
+              await github.rest.repos.updateReleaseAsset({ owner, repo, asset_id: sig.id, name: `${newName}.sig` });
+              core.info(`Renamed: ${sig.name} -> ${newName}.sig`);
+            }
+
+  build-macos:
+    needs: create-release
+    if: inputs.build-macos-arm != false
+    permissions:
+      contents: write
+    runs-on: macos-latest
+    steps:
+      - name: Set up Tauri build environment
+        uses: eclipse-opensovd/cicd-workflows/.github/actions/tauri-build-setup@fix-tauri-release
+        with:
+          tauri-conf-path: ${{ inputs.tauri-conf-path }}
+          cargo-toml-path: ${{ inputs.cargo-toml-path }}
+          rust-version: ${{ inputs.rust-version }}
+          rust-target: aarch64-apple-darwin
+          package-manager: ${{ inputs.package-manager }}
+          bun-version: ${{ inputs.bun-version }}
+          node-version: ${{ inputs.node-version }}
+          frontend-dir: ${{ inputs.frontend-dir }}
+
+      - name: Build and upload Tauri bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.release-id }}
+          args: "--target aarch64-apple-darwin"
+
+  build-windows:
+    needs: create-release
+    if: inputs.build-windows != false
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    steps:
+      - name: Set up Tauri build environment
+        uses: eclipse-opensovd/cicd-workflows/.github/actions/tauri-build-setup@fix-tauri-release
+        with:
+          tauri-conf-path: ${{ inputs.tauri-conf-path }}
+          cargo-toml-path: ${{ inputs.cargo-toml-path }}
+          rust-version: ${{ inputs.rust-version }}
+          package-manager: ${{ inputs.package-manager }}
+          bun-version: ${{ inputs.bun-version }}
+          node-version: ${{ inputs.node-version }}
+          frontend-dir: ${{ inputs.frontend-dir }}
+
+      - name: Build and upload Tauri bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.release-id }}
+          args: ""
 
   merge-updater-json:
     needs:
-      - build-tauri
-    runs-on: ubuntu-24.04
+      - create-release
+      - build-ubuntu-24-04
+      - build-ubuntu-26-04
+      - build-macos
+      - build-windows
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:
@@ -236,27 +335,31 @@ jobs:
         uses: actions/github-script@v9
         env:
           APP_BINARY_NAME: ${{ inputs.app-binary-name }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release-id }}
         with:
           script: |
-            const tagName   = context.ref.replace('refs/tags/', '');
-            const version   = tagName.replace(/^v/, '');
-            const owner     = context.repo.owner;
-            const repo      = context.repo.repo;
-            const bin       = process.env.APP_BINARY_NAME;   // e.g. "mdd-ui"
-            // Tauri uses underscores in some asset names and hyphens in others.
-            // Build both variants to match reliably.
-            const binU      = bin.replace(/-/g, '_');         // e.g. "mdd_ui"
+            const tagName     = context.ref.replace('refs/tags/', '');
+            const fullVersion = tagName.replace(/^v/, '');
+            // Strip pre-release suffix to match the version Tauri embedded in bundle filenames
+            const version     = fullVersion.replace(/[-+].*$/, '');
+            const owner       = context.repo.owner;
+            const repo        = context.repo.repo;
+            const bin         = process.env.APP_BINARY_NAME;   // e.g. "mdd-ui"
+            const releaseId   = parseInt(process.env.RELEASE_ID, 10);
 
-            const { data: release } = await github.rest.repos.getReleaseByTag({ owner, repo, tag: tagName });
-            const releaseId = release.id;
+            if (!bin) {
+              core.setFailed('APP_BINARY_NAME is empty - pass app-binary-name when calling this workflow');
+              return;
+            }
 
             const { data: assets } = await github.rest.repos.listReleaseAssets({
               owner, repo, release_id: releaseId, per_page: 100,
             });
 
-            // Each rule matches the Tauri-generated bundle name, provides the
-            // new name (with OS/arch identifier) and the updater platform
-            // key - null means the bundle is for direct download only.
+            // Each rule matches the already-renamed asset name and provides the
+            // updater platform key - null means the bundle is for direct download only.
+            // .deb files are renamed by each build job immediately after upload,
+            // so by this point they already carry the ubuntu2404/ubuntu2604 suffix.
             const bundleRules = [
               // macOS aarch64
               {
@@ -269,30 +372,32 @@ jobs:
                 newName:    `${bin}_${version}_darwin_aarch64.dmg`,
                 updaterKey: null,
               },
-              // Linux x86_64
+              // Linux x86_64 - AppImage built once on ubuntu-26.04 (generic)
               {
-                match:      new RegExp(`^${binU}_[\\d.]+_amd64\\.AppImage$`, 'i'),
+                match:      new RegExp(`^${bin}_[\\d.]+_amd64\\.AppImage$`, 'i'),
                 newName:    `${bin}_${version}_linux_amd64.AppImage`,
                 updaterKey: 'linux-x86_64',
               },
+              // Linux .deb for ubuntu-24.04
               {
-                match:      new RegExp(`^${binU}_[\\d.]+_amd64\\.deb$`, 'i'),
-                newName:    `${bin}_${version}_linux_amd64.deb`,
+                match:      new RegExp(`^${bin}_[\\d.]+_linux_ubuntu2404_amd64\\.deb$`, 'i'),
+                newName:    `${bin}_${version}_linux_ubuntu2404_amd64.deb`,
                 updaterKey: null,
               },
+              // Linux .deb for ubuntu-26.04
               {
-                match:      new RegExp(`^${bin}-[\\d.]+-1\\.x86_64\\.rpm$`, 'i'),
-                newName:    `${bin}-${version}-1_linux_x86_64.rpm`,
+                match:      new RegExp(`^${bin}_[\\d.]+_linux_ubuntu2604_amd64\\.deb$`, 'i'),
+                newName:    `${bin}_${version}_linux_ubuntu2604_amd64.deb`,
                 updaterKey: null,
               },
               // Windows x64
               {
-                match:      new RegExp(`^${binU}_[\\d.]+_x64-setup\\.exe$`, 'i'),
+                match:      new RegExp(`^${bin}_[\\d.]+_x64-setup\\.exe$`, 'i'),
                 newName:    `${bin}_${version}_windows_x64-setup.exe`,
                 updaterKey: 'windows-x86_64',
               },
               {
-                match:      new RegExp(`^${binU}_[\\d.]+_x64_en-US\\.msi$`, 'i'),
+                match:      new RegExp(`^${bin}_[\\d.]+_x64_en-US\\.msi$`, 'i'),
                 newName:    `${bin}_${version}_windows_x64_en-US.msi`,
                 updaterKey: null,
               },

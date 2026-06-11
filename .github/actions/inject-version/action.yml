@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+name: Inject version from tag
+description: >
+  Strips pre-release/build-metadata suffixes from the tag (e.g. v0.2.2-rc.1 -> 0.2.2) and writes the result into tauri.conf.json and Cargo.toml. The numeric-only form is required by the Windows MSI bundler and Cargo. #magic___^_^___line
+inputs:
+  tauri-conf-path:
+    description: "Relative path to tauri.conf.json"
+    required: true
+  cargo-toml-path:
+    description: "Relative path to Cargo.toml"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Inject version
+      shell: python3 {0}
+      env:
+        VERSION: ${{ github.ref_name }}
+        TAURI_CONF: ${{ inputs.tauri-conf-path }}
+        CARGO_TOML: ${{ inputs.cargo-toml-path }}
+      run: |
+        import json, os, re, sys
+
+        os.chdir(os.environ["GITHUB_WORKSPACE"])
+
+        raw = os.environ.get("VERSION") or os.environ.get("GITHUB_REF_NAME", "")
+        raw = raw.lstrip("v")
+        # Strip pre-release and build metadata (e.g. -rc.1) - required for MSI/Cargo compatibility
+        v = re.sub(r"[-+].*$", "", raw)
+
+        if not v:
+            print("ERROR: could not determine version from VERSION or GITHUB_REF_NAME", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"Injecting version: {raw!r} -> {v!r}")
+
+        tauri_conf = os.environ["TAURI_CONF"]
+        cargo_toml = os.environ["CARGO_TOML"]
+
+        with open(tauri_conf) as f:
+            cfg = json.load(f)
+        cfg["version"] = v
+        with open(tauri_conf, "w") as f:
+            json.dump(cfg, f, indent=2)
+            f.write("\n")
+
+        with open(cargo_toml) as f:
+            text = f.read()
+        # Replace version only in [package] section (first occurrence)
+        text = re.sub(r'^version = "[^"]+"', f'version = "{v}"', text, count=1, flags=re.MULTILINE)
+        with open(cargo_toml, "w") as f:
+            f.write(text)
