@@ -56,7 +56,7 @@ runs:
         submodules: false
 
     - name: Inject version from tag
-      uses: eclipse-opensovd/cicd-workflows/.github/actions/inject-version@fix-tauri-release
+      uses: eclipse-opensovd/cicd-workflows/.github/actions/inject-version@8815a69eba44f830247f2b4efde484676f6ac6fe
       with:
         tauri-conf-path: ${{ inputs.tauri-conf-path }}
         cargo-toml-path: ${{ inputs.cargo-toml-path }}
