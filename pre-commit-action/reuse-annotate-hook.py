@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2026 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+# SPDX-FileCopyrightText: 2026 Copyright (c) Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -9,6 +8,8 @@
 # This program and the accompanying materials are made available under the
 # terms of the Apache License Version 2.0 which is available at
 # https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
 
 # Dependency specification for `uv run`. See: https://peps.python.org/pep-0723
 # /// script
@@ -45,7 +46,7 @@ except ModuleNotFoundError:
 from fnmatch import fnmatch
 from pathlib import Path
 
-DEFAULT_COPYRIGHT = "The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"
+DEFAULT_COPYRIGHT = "Copyright (c) Contributors to the Eclipse Foundation"
 DEFAULT_LICENSE = "Apache-2.0"
 DEFAULT_TEMPLATE = "opensovd"
 DEFAULT_IGNORE_PATHS = ""
