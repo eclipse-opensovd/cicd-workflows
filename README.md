@@ -1,6 +1,5 @@
 <!--
-SPDX-License-Identifier: Apache-2.0
-SPDX-FileCopyrightText: 2025 The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)
+SPDX-FileCopyrightText: 2025 Copyright (c) Contributors to the Eclipse Foundation
 
 See the NOTICE file(s) distributed with this work for additional
 information regarding copyright ownership.
@@ -8,6 +7,8 @@ information regarding copyright ownership.
 This program and the accompanying materials are made available under the
 terms of the Apache License Version 2.0 which is available at
 https://www.apache.org/licenses/LICENSE-2.0
+
+SPDX-License-Identifier: Apache-2.0
 -->
 
 # Reusable GitHub Actions Workflows
@@ -46,7 +47,7 @@ jobs:
       rust-nightly-version: "2025-07-14"  # Optional, defaults to 2025-07-14
       python-version: "3.13"  # Optional, defaults to 3.13
       pre-commit-config-path: ""  # Optional, uses action's default config if not specified
-      copyright-text: ""  # Optional, defaults to "The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"
+      copyright-text: ""  # Optional, defaults to "Copyright (c) Contributors to the Eclipse Foundation"
       license: ""  # Optional, defaults to "Apache-2.0"
       reuse-template: ""  # Optional, defaults to "opensovd"
 ```
@@ -56,7 +57,7 @@ jobs:
 - `rust-nightly-version` (optional): Rust nightly version to use for Rust formatting in the format `YYYY-MM-DD`. Defaults to `2025-07-14`.
 - `python-version` (optional): Python version to use for pre-commit environment. Defaults to `3.13`.
 - `pre-commit-config-path` (optional): Path to a custom `.pre-commit-config.yml` in your repository. If not provided, uses the action's default config.
-- `copyright-text` (optional): Copyright holder text for `reuse annotate` (e.g. `"ACME Inc."`). Defaults to `"The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"`.
+- `copyright-text` (optional): Copyright holder text for `reuse annotate` (e.g. `"ACME Inc."`). Defaults to `"Copyright (c) Contributors to the Eclipse Foundation"`.
 - `license` (optional): SPDX license identifier for `reuse annotate` (e.g. `"MIT"`). Defaults to `"Apache-2.0"`.
 - `reuse-template` (optional): Name of the Jinja2 template in `.reuse/templates/` (without `.jinja2` suffix). Consumer repos can provide their own template. Defaults to `"opensovd"`.
 - `no-unicode-extensions` (optional): Comma-separated list of file extensions (e.g. `".py,.rs,.c"`) whose contents are checked for non-ASCII bytes.
@@ -168,8 +169,7 @@ When a formatter makes changes to your code, the pre-commit hook fails, requirin
 
 - `python-version`: Python version for pre-commit environment (default: `3.13`)
 - `config-path`: Path to custom `.pre-commit-config.yml` (optional)
-- `copyright-text`: Copyright holder text for `reuse annotate` (default: `"The Contributors to Eclipse OpenSOVD (see CONTRIBUTORS)"`)
-- `license`: SPDX license identifier for `reuse annotate` (default: `"Apache-2.0"`)
+- `copyright-text`: Copyright holder text for `reuse annotate` (default: `"Copyright (c) Contributors to the Eclipse Foundation"`)- `license`: SPDX license identifier for `reuse annotate` (default: `"Apache-2.0"`)
 - `reuse-template`: Name of Jinja2 template in `.reuse/templates/` (default: `"opensovd"`)
 - `no-unicode-extensions`: Comma-separated file extensions to check for non-ASCII characters (e.g. `".py,.rs,.c"`).
   Disabled by default (empty string). When enabled, any file with a matching extension containing a byte > 127 fails the check.
