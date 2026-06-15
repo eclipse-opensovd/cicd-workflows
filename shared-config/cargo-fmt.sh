@@ -17,7 +17,12 @@ if [ ! -f Cargo.toml ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RUSTFMT_TOML="$SCRIPT_DIR/.rustfmt.toml"
+
+RUSTFMT_TOML=".rustfmt.toml"
+if [ ! -f "$RUSTFMT_TOML" ]; then
+    echo "WARN: $RUSTFMT_TOML not found in the current directory. Using $RUSTFMT_TOML from script directory." >&2
+    RUSTFMT_TOML="$SCRIPT_DIR/.rustfmt.toml"
+fi
 
 CHECK_FLAG=""
 if [[ "${1:-}" == "--check" ]]; then
@@ -25,5 +30,5 @@ if [[ "${1:-}" == "--check" ]]; then
 fi
 
 # shellcheck disable=SC2086
-exec cargo fmt --all $CHECK_FLAG -- \
+exec cargo +nightly fmt --all $CHECK_FLAG -- \
     --config-path "$RUSTFMT_TOML"
