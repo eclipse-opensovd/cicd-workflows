@@ -82,7 +82,7 @@ permissions:
 jobs:
   update-baseline:
     name: Update CRAP Baseline
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
