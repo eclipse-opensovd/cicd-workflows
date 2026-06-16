@@ -8,39 +8,27 @@
 # https://www.apache.org/licenses/LICENSE-2.0
 #
 # SPDX-License-Identifier: Apache-2.0
-name: 'Format and Clippy'
-description: 'Run rustfmt and clippy checks with reviewdog'
+name: 'Nightly Format and Clippy'
+description: 'Run rustfmt check and nightly clippy, posting findings as a PR comment'
 inputs:
   toolchain:
-    description: 'Rust toolchain version to use'
-    required: true
-  github-token:
-    description: 'GitHub token for reviewdog'
-    required: true
-  fail-on-format-error:
-    description: 'Whether to fail the job on formatting errors'
+    description: 'Rust nightly toolchain to use (e.g. "nightly" or "nightly-2025-07-14")'
+    required: false
+    default: 'nightly'
+  all-features:
+    description: 'Pass --all-features to clippy'
     required: false
     default: 'true'
-  fail-on-clippy-error:
-    description: 'Whether to fail the job on clippy errors'
+  base-sha:
+    description: >-
+      Base commit SHA to diff against for filtering clippy findings to changed lines only. When set, only findings whose primary span falls on a line added or modified relative to this SHA are reported. When omitted all findings are reported.
     required: false
-    default: 'true'
-  clippy-deny-warnings:
-    description: 'Whether to deny warnings in clippy (add -D warnings flag)'
+    default: ''
+  post-pr-comment:
+    description: >-
+      Generate a nightly-clippy PR comment and upload it as the 'pr-comment-nightly-clippy' artifact. For non-fork PRs the comment is also posted directly (requires pull-requests: write in the caller). Fork PRs can be handled by a workflow_run workflow that calls post-pr-comments.yml.
     required: false
-    default: 'true'
-  clippy-features:
-    description: 'Additional features to pass to clippy (e.g. "integration-tests")'
-    required: false
-    default: 'default'
-  rustfmt-enable-reviewdog:
-    description: 'Whether to enable reviewdog for rustfmt'
-    required: false
-    default: 'true'
-  reporter:
-    description: 'Reporter to use for reviewdog'
-    required: false
-    default: 'github-pr-review'
+    default: 'false'
 runs:
   using: 'composite'
   steps:
@@ -51,69 +39,112 @@ runs:
         components: clippy, rustfmt
         cache-shared-key: ${{ inputs.toolchain }}
         rustflags: ""
-    - name: Install reviewdog
-      uses: reviewdog/action-setup@v1
-      with:
-        reviewdog_version: latest
-    - name: Formatting (rustfmt via reviewdog)
-      if: ${{ inputs.rustfmt-enable-reviewdog == 'true' }}
-      continue-on-error: ${{ inputs.fail-on-format-error == 'false' }}
+
+    - name: Format check (rustfmt)
       shell: bash
-      env:
-        REVIEWDOG_GITHUB_API_TOKEN: ${{ inputs.github-token }}
-        FAIL_ON_FORMAT: ${{ inputs.fail-on-format-error }}
+      run: cargo +${{ inputs.toolchain }} fmt --check
+
+    - name: Collect git diff for clippy filtering
+      id: diff
+      if: ${{ inputs.base-sha != '' }}
+      shell: bash
       run: |
-        if [ "$FAIL_ON_FORMAT" = "true" ]; then
-          SEVERITY_TRANSFORM="sed 's/severity=\"warning\"/severity=\"error\"/g'"
-          FAIL_LEVEL="any"
-          STDERR_SEVERITY="error"
-        else
-          SEVERITY_TRANSFORM="cat"
-          FAIL_LEVEL="none"
-          STDERR_SEVERITY="warning"
-        fi
+        git fetch --depth=1 origin "${{ inputs.base-sha }}" 2>/dev/null || true
+        git diff "${{ inputs.base-sha }}...HEAD" --unified=0 > /tmp/pr.diff
+        echo "diff_file=/tmp/pr.diff" >> "$GITHUB_OUTPUT"
 
-        FMT_EXIT=0
-        cargo fmt -- \
-          --emit=checkstyle \
-          --config-path "${{ github.action_path }}/../shared-config/.rustfmt.toml" \
-          2>/tmp/rustfmt_stderr.log \
-          | python3 "${{ github.action_path }}/fix-checkstyle-xml.py" \
-          | eval "$SEVERITY_TRANSFORM" \
-          > /tmp/checkstyle.xml \
-          || FMT_EXIT=$?
-
-        # Merge overflow/unformatted errors from stderr into checkstyle XML
-        # so reviewdog can annotate them inline on the PR
-        python3 "${{ github.action_path }}/merge-rustfmt-stderr.py" \
-          /tmp/checkstyle.xml /tmp/rustfmt_stderr.log "$STDERR_SEVERITY"
-
-        reviewdog \
-          -f=checkstyle \
-          -reporter=${{ inputs.reporter }} \
-          -filter-mode=nofilter \
-          -fail-level="$FAIL_LEVEL" \
-          -level=error \
-          < /tmp/checkstyle.xml
-        rm -f /tmp/checkstyle.xml /tmp/rustfmt_stderr.log
-
-        # Propagate the original rustfmt failure after reviewdog has posted
-        # annotations - the step still fails, but the developer gets inline
-        # comments pointing to the problematic lines.
-        if [ "$FMT_EXIT" -ne 0 ]; then
-          exit "$FMT_EXIT"
-        fi
-    - name: Formatting (rustfmt without reviewdog)
-      if: ${{ inputs.rustfmt-enable-reviewdog == 'false' }}
-      continue-on-error: ${{ inputs.fail-on-format-error == 'false' }}
+    - name: Clippy (nightly, warn-only)
+      id: clippy
+      continue-on-error: true
       shell: bash
-      run: ${{ github.action_path }}/../shared-config/cargo-fmt.sh --check
-    - name: Clippy
-      uses: giraffate/clippy-action@v1
+      run: |
+        FEATURES_FLAG=""
+        if [ "${{ inputs.all-features }}" = "true" ]; then
+          FEATURES_FLAG="--all-features"
+        fi
+        DIFF_ARG=""
+        if [ -n "${{ inputs.base-sha }}" ]; then
+          DIFF_ARG="--diff /tmp/pr.diff"
+        fi
+        RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        set +e
+        cargo clippy --keep-going --locked $FEATURES_FLAG --message-format=json 2>&1 \
+          | python3 "${{ github.action_path }}/filter-clippy-findings.py" \
+              $DIFF_ARG \
+              --toolchain "${{ inputs.toolchain }}" \
+              --run-url "${RUN_URL}" \
+              ${{ inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' && '--output /tmp/clippy-comment.md' || '' }} \
+          | tee /tmp/clippy-output.txt
+        PIPE_STATUS=("${PIPESTATUS[@]}")
+        set -e
+        CARGO_EXIT="${PIPE_STATUS[0]}"
+        FILTER_EXIT="${PIPE_STATUS[1]}"
+        TEE_EXIT="${PIPE_STATUS[2]}"
+        echo "::debug::PIPESTATUS: cargo=$CARGO_EXIT filter=$FILTER_EXIT tee=$TEE_EXIT"
+        echo "::debug::clippy output size: $(wc -c < /tmp/clippy-output.txt) bytes"
+        if [ "$CARGO_EXIT" -ne 0 ] && [ "$CARGO_EXIT" -ne 101 ]; then
+          echo "::error::cargo clippy failed with unexpected exit code $CARGO_EXIT (build error)"
+          exit "$CARGO_EXIT"
+        fi
+        if [ "$FILTER_EXIT" -ne 0 ]; then
+          echo "has_findings=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "has_findings=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Write clippy findings to step summary
+      if: ${{ steps.clippy.outputs.has_findings == 'true' }}
+      shell: bash
+      run: |
+        echo "### Nightly Clippy Findings" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        cat /tmp/clippy-output.txt >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Prepare nightly-clippy comment artifact
+      if: ${{ inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' && steps.clippy.outputs.has_findings == 'true' }}
+      shell: bash
+      run: |
+        mkdir -p pr-comment-nightly-clippy
+        echo "${{ github.event.number }}" > pr-comment-nightly-clippy/pr_number
+        cp /tmp/clippy-comment.md pr-comment-nightly-clippy/body.md
+
+    - name: Upload nightly-clippy comment artifact
+      if: ${{ inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' && steps.clippy.outputs.has_findings == 'true' }}
+      uses: actions/upload-artifact@v4
       with:
-        reporter: ${{ inputs.reporter }}
-        github_token: ${{ inputs.github-token }}
-        clippy_flags: --locked --all-targets ${{ inputs.clippy-features == 'all-features' && '--all-features' || format('--features {0}', inputs.clippy-features) }} ${{ inputs.clippy-deny-warnings == 'true' && '-- -D warnings' || '' }}
-        filter_mode: 'nofilter'
-        fail_on_error: ${{ inputs.fail-on-clippy-error }}
-        level: ${{ inputs.fail-on-clippy-error == 'true' && 'error' || 'warning' }}
+        name: pr-comment-nightly-clippy
+        path: pr-comment-nightly-clippy/
+
+    - name: Post nightly-clippy comment on PR
+      if: >-
+        inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' && steps.clippy.outputs.has_findings == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+      uses: actions/github-script@v9
+      with:
+        script: |
+          const fs = require('fs');
+          const body = fs.readFileSync('pr-comment-nightly-clippy/body.md', 'utf8');
+          const marker = '<!-- nightly-clippy-report -->';
+
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const existing = comments.find(c => c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }

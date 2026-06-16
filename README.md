@@ -86,33 +86,36 @@ jobs:
 
 #### Rust Lint And Format Action
 
-```yaml
+Runs `cargo fmt --check` and nightly clippy. Clippy findings are reported as
+warnings and never fail the job, so they appear as a neutral annotation rather
+than a blocking failure. Optionally posts a PR comment with a summary.
 
-# Make sure to copy this into you CI pipeline too, otherwise review comments cannot be posted.
+```yaml
 permissions:
   contents: read
-  pull-requests: write # Grants permission to post review comments
+  pull-requests: write # required when post-pr-comment is true
 
 jobs:
-  format_and_clippy_nightly_toolchain_pinned:
-    concurrency:
-      group: format_and_clippy_nightly_toolchain_pinned-${{ github.ref }}
+  nightly-lint:
     runs-on: ubuntu-26.04
-    continue-on-error: false
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - name: Nightly format and clippy
+        uses: eclipse-opensovd/cicd-workflows/rust-lint-and-format-action@main
         with:
-          submodules: false
-      - name: Format and Clippy
-        uses: eclipse-opensovd/cicd-workflows/.github/workflows/checks.yml@main
-        with:
-          toolchain: nightly-2025-07-14
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          fail-on-format-error: 'true'
-          fail-on-clippy-error: 'true'
-          clippy-deny-warnings: 'true'
+          toolchain: nightly-2025-07-14   # optional, defaults to "nightly"
+          all-features: 'true'            # optional, defaults to "true"
+          post-pr-comment: 'true'         # optional, defaults to "false"
 ```
+
+**Inputs:**
+
+- `toolchain`: Rust nightly toolchain to use (default: `"nightly"`).
+- `all-features`: Pass `--all-features` to clippy (default: `"true"`).
+- `post-pr-comment`: Upload findings as a `pr-comment-nightly-clippy` artifact
+  and post them directly on non-fork PRs (default: `"false"`).
+  Fork PRs can be handled by a `workflow_run` workflow that calls
+  `post-pr-comments.yml` with `comment-artifacts: pr-comment-nightly-clippy`.
 
 ## Actions in This Repository
 
@@ -203,3 +206,18 @@ uv run prek run --all-files
 #### Rust Toolchain (Required for Rust Projects)
 
 [Install Rust](https://www.rust-lang.org/tools/install) - Required if your project has a `Cargo.toml` file.
+
+### Running nightly clippy locally
+
+The pre-commit `clippy` hook uses the stable toolchain by default. To opt in to
+nightly clippy locally for a single run, set `RUSTUP_TOOLCHAIN`:
+
+```bash
+RUSTUP_TOOLCHAIN=nightly prek run clippy
+```
+
+Or for all hooks:
+
+```bash
+RUSTUP_TOOLCHAIN=nightly prek run --all-files
+```

@@ -51,13 +51,13 @@
   pass_filenames: false
 
 - id: cargo-fmt
-  name: Rust format (shared config)
-  entry: shared-config/cargo-fmt.sh
-  language: script
+  name: Rust format
+  entry: cargo +nightly fmt --all
+  language: system
   pass_filenames: false
 
 - id: clippy
-  name: Clippy (shared config)
-  entry: shared-config/cargo-clippy.sh
-  language: script
+  name: Clippy
+  entry: cargo clippy --all-targets --locked -- -D warnings
+  language: system
   pass_filenames: false
