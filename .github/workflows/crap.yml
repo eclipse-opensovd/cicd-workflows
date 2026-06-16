@@ -61,6 +61,10 @@ on:
           Generate a CRAP PR comment and upload it as the 'pr-comment-crap' artifact. For non-fork PRs the comment is also posted directly (requires pull-requests: write in the caller). Fork PRs can be handled by a workflow_run workflow that calls post-pr-comments.yml.
         type: boolean
         default: false
+      fail-regressions:
+        description: "Whether to fail the job if any CRAP score regressions are detected"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -102,6 +106,7 @@ jobs:
           git show "origin/${{ inputs.baseline-branch }}:${{ inputs.baseline-file }}" > baseline.json
 
       - name: Regression check
+        if: ${{ inputs.fail-regressions }}
         run: |
           cargo crap \
             --lcov "${{ inputs.lcov-file }}" \
