@@ -317,6 +317,56 @@ jobs:
           releaseId: ${{ needs.create-release.outputs.release-id }}
           args: ""
 
+      - name: Build portable Windows binary
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: tauri build --no-bundle
+
+      - name: Upload and rename portable Windows binary
+        uses: actions/github-script@v9
+        env:
+          APP_BINARY_NAME: ${{ inputs.app-binary-name }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release-id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const bin = process.env.APP_BINARY_NAME;
+            const releaseId = parseInt(process.env.RELEASE_ID, 10);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const tagName = context.ref.replace('refs/tags/', '');
+            const fullVersion = tagName.replace(/^v/, '');
+            const version = fullVersion.replace(/[-+].*$/, '');
+
+            const exePath = `target/release/${bin}.exe`;
+            const sigPath = `${exePath}.sig`;
+            const newName = `${bin}_${version}_windows_x64_portable.exe`;
+
+            if (!fs.existsSync(exePath)) {
+              core.warning(`Portable binary not found at ${exePath} - skipping upload`);
+              return;
+            }
+
+            const exeData = fs.readFileSync(exePath);
+            await github.rest.repos.uploadReleaseAsset({
+              owner, repo, release_id: releaseId,
+              name: newName,
+              data: exeData,
+            });
+            core.info(`Uploaded portable binary: ${newName}`);
+
+            if (fs.existsSync(sigPath)) {
+              const sigData = fs.readFileSync(sigPath, 'utf8');
+              await github.rest.repos.uploadReleaseAsset({
+                owner, repo, release_id: releaseId,
+                name: `${newName}.sig`,
+                data: sigData,
+              });
+              core.info(`Uploaded signature: ${newName}.sig`);
+            }
+
   merge-updater-json:
     needs:
       - create-release
@@ -400,6 +450,11 @@ jobs:
               {
                 match:      new RegExp(`^${bin}_[\\d.]+_x64_en-US\\.msi$`, 'i'),
                 newName:    `${bin}_${version}_windows_x64_en-US.msi`,
+                updaterKey: null,
+              },
+              {
+                match:      new RegExp(`^${bin}_[\\d.]+_windows_x64_portable\\.exe$`, 'i'),
+                newName:    `${bin}_${version}_windows_x64_portable.exe`,
                 updaterKey: null,
               },
             ];
