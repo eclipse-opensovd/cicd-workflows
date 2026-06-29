@@ -53,7 +53,7 @@ permissions:
 jobs:
   coverage:
     name: Code Coverage
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       IGNORE_REGEX: ${{ inputs.ignore-filename-regex }}
     steps:
