@@ -64,7 +64,7 @@ runs:
         fi
         DIFF_ARG=""
         if [ -n "${{ inputs.base-sha }}" ]; then
-          DIFF_ARG="--diff /tmp/pr.diff"
+          DIFF_ARG="--diff ${{ steps.diff.outputs.diff_file }}"
         fi
         RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
         set +e
@@ -103,19 +103,47 @@ runs:
         echo '```' >> "$GITHUB_STEP_SUMMARY"
 
     - name: Prepare nightly-clippy comment artifact
-      if: ${{ inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' && steps.clippy.outputs.has_findings == 'true' }}
+      if: ${{ inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' }}
       shell: bash
       run: |
         mkdir -p pr-comment-nightly-clippy
         echo "${{ github.event.number }}" > pr-comment-nightly-clippy/pr_number
-        cp /tmp/clippy-comment.md pr-comment-nightly-clippy/body.md
+        MARKER='<!-- nightly-clippy-report -->'
+        if [ "${{ steps.clippy.outputs.has_findings }}" = "true" ]; then
+          cp /tmp/clippy-comment.md pr-comment-nightly-clippy/body.md
+        else
+          printf '%s\n' "${MARKER}" > pr-comment-nightly-clippy/body.md
+          printf 'No findings detected.\n' >> pr-comment-nightly-clippy/body.md
+        fi
 
     - name: Upload nightly-clippy comment artifact
-      if: ${{ inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' && steps.clippy.outputs.has_findings == 'true' }}
+      if: ${{ inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' }}
       uses: actions/upload-artifact@v4
       with:
         name: pr-comment-nightly-clippy
         path: pr-comment-nightly-clippy/
+
+    - name: Remove resolved nightly-clippy comment
+      if: >-
+        inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' && steps.clippy.outputs.has_findings == 'false' && github.event.pull_request.head.repo.full_name == github.repository
+      uses: actions/github-script@v9
+      with:
+        script: |
+          const marker = '<!-- nightly-clippy-report -->';
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const existing = comments.find(c => c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.deleteComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+            });
+            console.log(`  -> existing nightly-clippy comment deleted (no new findings).`);
+          }
 
     - name: Post nightly-clippy comment on PR
       if: >-

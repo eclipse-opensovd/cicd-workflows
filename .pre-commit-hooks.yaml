@@ -58,6 +58,6 @@
 
 - id: clippy
   name: Clippy
-  entry: cargo clippy --all-targets --locked -- -D warnings
+  entry: cargo clippy --all-targets --all-features --locked -- -D warnings
   language: system
   pass_filenames: false
