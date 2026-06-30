@@ -130,15 +130,13 @@ jobs:
         if: ${{ always() && inputs.post-pr-comment && github.event_name == 'pull_request' }}
         shell: bash
         run: |
+          if [ ! -f crap-comment.md ]; then
+            echo "No CRAP comment generated, skipping artifact."
+            exit 0
+          fi
           mkdir -p pr-comment-crap
           echo "${{ github.event.number }}" > pr-comment-crap/pr_number
-          MARKER='<!-- cargo-crap-report -->'
-          if [ -f crap-comment.md ]; then
-            cp crap-comment.md pr-comment-crap/body.md
-          else
-            printf '%s\n' "${MARKER}" > pr-comment-crap/body.md
-            printf 'No findings detected.\n' >> pr-comment-crap/body.md
-          fi
+          cp crap-comment.md pr-comment-crap/body.md
 
       - name: Upload CRAP comment artifact
         if: ${{ always() && inputs.post-pr-comment && github.event_name == 'pull_request' }}
@@ -151,37 +149,6 @@ jobs:
       # Post directly for non-fork PRs (instant feedback).
       # Fork PRs lack write permissions; they are handled by a separate
       # workflow_run workflow that calls post-pr-comments.yml.
-      - name: Remove resolved CRAP comment
-        if: >-
-          always() && inputs.post-pr-comment && github.event_name == 'pull_request' && !cancelled() && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const bodyPath = 'pr-comment-crap/body.md';
-            if (!fs.existsSync(bodyPath)) return;
-            const body = fs.readFileSync(bodyPath, 'utf8');
-            const marker = '<!-- cargo-crap-report -->';
-            const lines = body.trim().split('\n');
-            if (lines.length > 2 || lines[0] !== marker) {
-              console.log('  -> CRAP comment has findings, skipping deletion.');
-              return;
-            }
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.deleteComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-              });
-              console.log(`  -> existing CRAP comment deleted (no new findings).`);
-            }
-
       - name: Post CRAP comment on PR
         if: >-
           always() && inputs.post-pr-comment && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -189,31 +156,9 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const bodyPath = 'pr-comment-crap/body.md';
-            if (!fs.existsSync(bodyPath)) return;
-            const body = fs.readFileSync(bodyPath, 'utf8');
+            if (!fs.existsSync('pr-comment-crap/body.md')) return;
+            const body = fs.readFileSync('pr-comment-crap/body.md', 'utf8');
             const marker = '<!-- cargo-crap-report -->';
-
-            // Check if this is a deletion signal (no findings body)
-            const lines = body.trim().split('\n');
-            if (lines.length <= 2 && lines[0] === marker) {
-              console.log('  -> CRAP comment body is a deletion signal, removing any existing comment.');
-              const { data: comments } = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-              });
-              const existing = comments.find(c => c.body.includes(marker));
-              if (existing) {
-                await github.rest.issues.deleteComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: existing.id,
-                });
-                console.log(`  -> existing CRAP comment deleted (no new findings).`);
-              }
-              return;
-            }
 
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,

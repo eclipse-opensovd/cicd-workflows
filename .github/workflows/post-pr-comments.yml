@@ -115,26 +115,14 @@ jobs:
                   console.log(`  -> comment already up to date, skipping.`);
                   continue;
                 }
-                // Check if the new body is a deletion signal (no findings).
-                // Producing workflows emit this when all prior findings have been resolved.
-                const lines = body.trim().split('\n');
-                if (lines.length <= 2 && lines[0] === marker) {
-                  await github.rest.issues.deleteComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    comment_id: existing.id,
-                  });
-                  console.log(`  -> comment deleted (findings resolved).`);
-                } else {
-                  await github.rest.issues.updateComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    comment_id: existing.id,
-                    body,
-                  });
-                  console.log(`  -> comment updated.`);
-                }
-              } else if (body.trim() !== marker && !body.trim().startsWith(marker + '\nNo findings')) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+                console.log(`  -> comment updated.`);
+              } else {
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,

@@ -51,13 +51,23 @@
   pass_filenames: false
 
 - id: cargo-fmt
-  name: Rust format
-  entry: cargo +nightly fmt --all
-  language: system
+  name: Rust format (nightly)
+  entry: pre-commit-action/cargo-fmt-hook.py
+  language: script
   pass_filenames: false
+  args:
+    - --toolchain=nightly
+    - --all
 
-- id: clippy
+- id: cargo-clippy
   name: Clippy
-  entry: cargo clippy --all-targets --all-features --locked -- -D warnings
-  language: system
+  entry: pre-commit-action/cargo-clippy-hook.py
+  language: script
   pass_filenames: false
+  args:
+    - --all-targets
+    - --all-features
+    - --locked
+    - --
+    - -D
+    - warnings

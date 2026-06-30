@@ -86,36 +86,29 @@ jobs:
 
 #### Rust Lint And Format Action
 
-Runs `cargo fmt --check` and nightly clippy. Clippy findings are reported as
-warnings and never fail the job, so they appear as a neutral annotation rather
-than a blocking failure. Optionally posts a PR comment with a summary.
+Runs `cargo fmt --check` and clippy. Findings are written to the step summary
+and emitted as GitHub Actions annotations. The job fails if either check reports
+issues.
 
 ```yaml
-permissions:
-  contents: read
-  pull-requests: write # required when post-pr-comment is true
-
 jobs:
-  nightly-lint:
+  lint:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
-      - name: Nightly format and clippy
+      - name: Format and clippy
         uses: eclipse-opensovd/cicd-workflows/rust-lint-and-format-action@main
         with:
-          toolchain: nightly-2025-07-14   # optional, defaults to "nightly"
-          all-features: 'true'            # optional, defaults to "true"
-          post-pr-comment: 'true'         # optional, defaults to "false"
+          toolchain: nightly-2025-07-14   # optional, defaults to "stable"
+          extra-args: '--all-features'    # optional, defaults to "--all-features"
 ```
 
 **Inputs:**
 
-- `toolchain`: Rust nightly toolchain to use (default: `"nightly"`).
-- `all-features`: Pass `--all-features` to clippy (default: `"true"`).
-- `post-pr-comment`: Upload findings as a `pr-comment-nightly-clippy` artifact
-  and post them directly on non-fork PRs (default: `"false"`).
-  Fork PRs can be handled by a `workflow_run` workflow that calls
-  `post-pr-comments.yml` with `comment-artifacts: pr-comment-nightly-clippy`.
+- `toolchain`: Rust toolchain to use (e.g. `"nightly"` or `"nightly-2025-07-14"`).
+  When empty (the default), the toolchain from the project's `rust-toolchain.toml`
+  or the pre-installed active toolchain is used.
+- `extra-args`: Additional arguments passed to `cargo clippy` (default: `"--all-features"`).
 
 ## Actions in This Repository
 

@@ -8,27 +8,18 @@
 # https://www.apache.org/licenses/LICENSE-2.0
 #
 # SPDX-License-Identifier: Apache-2.0
-name: 'Nightly Format and Clippy'
-description: 'Run rustfmt check and nightly clippy, posting findings as a PR comment'
+name: 'Format and Clippy'
+description: 'Run rustfmt check and clippy'
 inputs:
   toolchain:
-    description: 'Rust nightly toolchain to use (e.g. "nightly" or "nightly-2025-07-14")'
-    required: false
-    default: 'nightly'
-  all-features:
-    description: 'Pass --all-features to clippy'
-    required: false
-    default: 'true'
-  base-sha:
     description: >-
-      Base commit SHA to diff against for filtering clippy findings to changed lines only. When set, only findings whose primary span falls on a line added or modified relative to this SHA are reported. When omitted all findings are reported.
+      Rust toolchain to use for rustfmt and clippy (e.g. "stable", "nightly", or "nightly-2025-07-14"). Defaults to "stable".
     required: false
-    default: ''
-  post-pr-comment:
-    description: >-
-      Generate a nightly-clippy PR comment and upload it as the 'pr-comment-nightly-clippy' artifact. For non-fork PRs the comment is also posted directly (requires pull-requests: write in the caller). Fork PRs can be handled by a workflow_run workflow that calls post-pr-comments.yml.
+    default: 'stable'
+  extra-args:
+    description: 'Additional arguments passed to cargo clippy (e.g. "--all-features" or "--all-features --all-targets")'
     required: false
-    default: 'false'
+    default: '--all-features --all-targets --D warnings'
 runs:
   using: 'composite'
   steps:
@@ -41,138 +32,25 @@ runs:
         rustflags: ""
 
     - name: Format check (rustfmt)
+      id: fmt
+      continue-on-error: true
       shell: bash
       run: cargo +${{ inputs.toolchain }} fmt --check
 
-    - name: Collect git diff for clippy filtering
-      id: diff
-      if: ${{ inputs.base-sha != '' }}
-      shell: bash
-      run: |
-        git fetch --depth=1 origin "${{ inputs.base-sha }}" 2>/dev/null || true
-        git diff "${{ inputs.base-sha }}...HEAD" --unified=0 > /tmp/pr.diff
-        echo "diff_file=/tmp/pr.diff" >> "$GITHUB_OUTPUT"
-
-    - name: Clippy (nightly, warn-only)
+    - name: Clippy
       id: clippy
       continue-on-error: true
       shell: bash
-      run: |
-        FEATURES_FLAG=""
-        if [ "${{ inputs.all-features }}" = "true" ]; then
-          FEATURES_FLAG="--all-features"
-        fi
-        DIFF_ARG=""
-        if [ -n "${{ inputs.base-sha }}" ]; then
-          DIFF_ARG="--diff ${{ steps.diff.outputs.diff_file }}"
-        fi
-        RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-        set +e
-        cargo clippy --keep-going --locked $FEATURES_FLAG --message-format=json 2>&1 \
-          | python3 "${{ github.action_path }}/filter-clippy-findings.py" \
-              $DIFF_ARG \
-              --toolchain "${{ inputs.toolchain }}" \
-              --run-url "${RUN_URL}" \
-              ${{ inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' && '--output /tmp/clippy-comment.md' || '' }} \
-          | tee /tmp/clippy-output.txt
-        PIPE_STATUS=("${PIPESTATUS[@]}")
-        set -e
-        CARGO_EXIT="${PIPE_STATUS[0]}"
-        FILTER_EXIT="${PIPE_STATUS[1]}"
-        TEE_EXIT="${PIPE_STATUS[2]}"
-        echo "::debug::PIPESTATUS: cargo=$CARGO_EXIT filter=$FILTER_EXIT tee=$TEE_EXIT"
-        echo "::debug::clippy output size: $(wc -c < /tmp/clippy-output.txt) bytes"
-        if [ "$CARGO_EXIT" -ne 0 ] && [ "$CARGO_EXIT" -ne 101 ]; then
-          echo "::error::cargo clippy failed with unexpected exit code $CARGO_EXIT (build error)"
-          exit "$CARGO_EXIT"
-        fi
-        if [ "$FILTER_EXIT" -ne 0 ]; then
-          echo "has_findings=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "has_findings=false" >> "$GITHUB_OUTPUT"
-        fi
+      run: cargo +${{ inputs.toolchain }} clippy --locked ${{ inputs.extra-args }}
 
-    - name: Write clippy findings to step summary
-      if: ${{ steps.clippy.outputs.has_findings == 'true' }}
+    - name: Fail if format check failed
+      if: ${{ steps.fmt.outcome == 'failure' }}
       shell: bash
       run: |
-        echo "### Nightly Clippy Findings" >> "$GITHUB_STEP_SUMMARY"
-        echo "" >> "$GITHUB_STEP_SUMMARY"
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
-        cat /tmp/clippy-output.txt >> "$GITHUB_STEP_SUMMARY"
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        echo "::error::Format check failed. Run 'cargo +${{ inputs.toolchain }} fmt' to fix formatting issues."
+        exit 1
 
-    - name: Prepare nightly-clippy comment artifact
-      if: ${{ inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' }}
+    - name: Fail if clippy found warnings
+      if: ${{ steps.clippy.outcome == 'failure' }}
       shell: bash
-      run: |
-        mkdir -p pr-comment-nightly-clippy
-        echo "${{ github.event.number }}" > pr-comment-nightly-clippy/pr_number
-        MARKER='<!-- nightly-clippy-report -->'
-        if [ "${{ steps.clippy.outputs.has_findings }}" = "true" ]; then
-          cp /tmp/clippy-comment.md pr-comment-nightly-clippy/body.md
-        else
-          printf '%s\n' "${MARKER}" > pr-comment-nightly-clippy/body.md
-          printf 'No findings detected.\n' >> pr-comment-nightly-clippy/body.md
-        fi
-
-    - name: Upload nightly-clippy comment artifact
-      if: ${{ inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: pr-comment-nightly-clippy
-        path: pr-comment-nightly-clippy/
-
-    - name: Remove resolved nightly-clippy comment
-      if: >-
-        inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' && steps.clippy.outputs.has_findings == 'false' && github.event.pull_request.head.repo.full_name == github.repository
-      uses: actions/github-script@v9
-      with:
-        script: |
-          const marker = '<!-- nightly-clippy-report -->';
-          const { data: comments } = await github.rest.issues.listComments({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
-          });
-          const existing = comments.find(c => c.body.includes(marker));
-          if (existing) {
-            await github.rest.issues.deleteComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: existing.id,
-            });
-            console.log(`  -> existing nightly-clippy comment deleted (no new findings).`);
-          }
-
-    - name: Post nightly-clippy comment on PR
-      if: >-
-        inputs.post-pr-comment == 'true' && github.event_name == 'pull_request' && steps.clippy.outputs.has_findings == 'true' && github.event.pull_request.head.repo.full_name == github.repository
-      uses: actions/github-script@v9
-      with:
-        script: |
-          const fs = require('fs');
-          const body = fs.readFileSync('pr-comment-nightly-clippy/body.md', 'utf8');
-          const marker = '<!-- nightly-clippy-report -->';
-
-          const { data: comments } = await github.rest.issues.listComments({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
-          });
-          const existing = comments.find(c => c.body.includes(marker));
-          if (existing) {
-            await github.rest.issues.updateComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: existing.id,
-              body,
-            });
-          } else {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            });
-          }
+      run: exit 1
