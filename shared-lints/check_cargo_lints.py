@@ -130,8 +130,17 @@ def main():
         sys.exit(1)
 
     # Load lints
-    shared_lints = load_shared_lints(shared_lints_path)
-    cargo_lints = load_cargo_lints(cargo_toml_path)
+    try:
+        shared_lints = load_shared_lints(shared_lints_path)
+    except tomllib.TOMLDecodeError as e:
+        print(f"Error: failed to parse {shared_lints_path} as TOML: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        cargo_lints = load_cargo_lints(cargo_toml_path)
+    except tomllib.TOMLDecodeError as e:
+        print(f"Error: failed to parse {cargo_toml_path} as TOML: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Compare
     missing, mismatched = compare_lints(shared_lints, cargo_lints)

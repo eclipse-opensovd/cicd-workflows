@@ -283,7 +283,25 @@ def _is_superset(canonical: dict, actual: dict, path: str = "") -> list[str]:
     return issues
 
 
+def _load_yaml(path: Path) -> tuple[dict | None, str | None]:
+    """Parse a YAML file, returning (data, None) on success or (None, error) on failure."""
+    try:
+        return yaml.safe_load(path.read_text()) or {}, None
+    except yaml.YAMLError as e:
+        return None, f"Failed to parse {path} as YAML: {e}"
+
+
+def _load_toml(path: Path) -> tuple[dict | None, str | None]:
+    """Parse a TOML file, returning (data, None) on success or (None, error) on failure."""
+    try:
+        return tomllib.loads(path.read_text()), None
+    except tomllib.TOMLDecodeError as e:
+        return None, f"Failed to parse {path} as TOML: {e}"
+
+
 def check_configs(failures: list[str], has_rust: bool) -> None:
+    loaders = {"yaml_superset": _load_yaml, "toml_superset": _load_toml}
+
     for cfg in REQUIRED_CONFIGS:
         if cfg["rust_only"] and not has_rust:
             continue
@@ -298,19 +316,17 @@ def check_configs(failures: list[str], has_rust: bool) -> None:
             continue
 
         check_mode = cfg.get("check_mode", "exact")
+        loader = loaders.get(check_mode)
 
-        if check_mode == "yaml_superset":
-            canonical_data = yaml.safe_load(canonical_path.read_text()) or {}
-            actual_data = yaml.safe_load(p.read_text()) or {}
-            issues = _is_superset(canonical_data, actual_data)
-            if issues:
-                failures.append(
-                    f"Config file {cfg['path']} is missing required settings:\n"
-                    + "".join(f"  - {issue}\n" for issue in issues)
-                )
-        elif check_mode == "toml_superset":
-            canonical_data = tomllib.loads(canonical_path.read_text())
-            actual_data = tomllib.loads(p.read_text())
+        if loader is not None:
+            canonical_data, error = loader(canonical_path)
+            if error:
+                failures.append(error)
+                continue
+            actual_data, error = loader(p)
+            if error:
+                failures.append(error)
+                continue
             issues = _is_superset(canonical_data, actual_data)
             if issues:
                 failures.append(
