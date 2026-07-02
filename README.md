@@ -76,7 +76,7 @@ Runs pre-commit hooks with standardized configuration:
 ```yaml
 jobs:
   pre-commit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Run checks
         # Or use a long SHA instead of a branch (recommended)
@@ -97,7 +97,7 @@ jobs:
   format_and_clippy_nightly_toolchain_pinned:
     concurrency:
       group: format_and_clippy_nightly_toolchain_pinned-${{ github.ref }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     continue-on-error: false
     steps:
       - name: Checkout repository
