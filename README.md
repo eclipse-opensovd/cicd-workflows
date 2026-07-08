@@ -176,6 +176,52 @@ When a formatter makes changes to your code, the pre-commit hook fails, requirin
 - `allowed-unicode-chars`: Comma-separated Unicode characters permitted in files checked by `no-unicode-extensions` (e.g. `"µ,§"`).
   Empty by default.
 
+### Using the Conventional Commits Workflow
+
+The `conventional-commits.yml` workflow validates PR titles and individual commit messages against the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+
+Commit subject validation uses [prek](https://prek.j178.dev/) to run the `conventional-pre-commit` hook from the caller's `.pre-commit-config.yaml`. This ensures CI validates exactly what developers see locally.
+
+**Prerequisites**: The calling repository must have a `.pre-commit-config.yaml` with the `conventional-pre-commit` hook configured:
+
+```yaml
+# .pre-commit-config.yaml (in your repository)
+repos:
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+```
+
+**Usage**:
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+
+jobs:
+  conventional-commits:
+    uses: eclipse-opensovd/cicd-workflows/.github/workflows/conventional-commits.yml@main
+    with:
+      validate-pr-title: true
+      validate-commits: true
+```
+
+#### Available Inputs
+
+- `validate-pr-title` (optional): Validate PR title against Conventional Commits format. Defaults to `true`.
+- `validate-commits` (optional): Validate individual commit subjects using prek with the caller's `.pre-commit-config.yaml`. Defaults to `true`.
+- `types` (optional): Newline-separated list of allowed conventional commit types for PR title validation. Commit subject validation uses types from the caller's `.pre-commit-config.yaml`. Defaults to `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+- `scopes` (optional): Newline-separated list of allowed scopes for PR title validation. Empty means any scope is allowed.
+- `require-scope` (optional): Require a scope in PR title. Defaults to `false`.
+- `subject-pattern` (optional): Regex pattern the PR title subject must match.
+- `subject-pattern-error` (optional): Error message when `subject-pattern` fails.
+- `ignore-authors` (optional): Newline-separated list of commit author emails to skip (e.g. bot accounts).
+- `prek-version` (optional): Version of prek to install. Defaults to latest.
+
 ## Running Checks Locally
 
 Run all pre-commit hooks on your repository using [prek](https://github.com/j178/prek):
