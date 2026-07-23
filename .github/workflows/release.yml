@@ -1,0 +1,160 @@
+# SPDX-FileCopyrightText: 2026 Copyright (c) Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: >
+          Release version string. Typically the git tag (e.g. "v1.2.3") or a rolling identifier like "nightly" or "latest". Used for archive names and the GitHub Release title.
+        type: string
+        required: true
+      artifact-pattern:
+        description: >
+          Pattern for actions/download-artifact to match build artifacts. Each matching artifact directory is expected to contain the binary. Example: "my-app-*" matches "my-app-x86_64-unknown-linux-gnu", etc.
+        type: string
+        required: true
+      binary-name:
+        description: >
+          Base name of the binary inside each artifact directory (without extension). Windows artifacts are expected to have a .exe suffix automatically. Example: "opensovd-gateway"
+        type: string
+        required: true
+      git-cliff-version:
+        description: "Version of git-cliff to install"
+        type: string
+        default: "2.11.0"
+      git-cliff-args:
+        description: >
+          Extra arguments for git-cliff (e.g. "--config cliff.toml"). The workflow automatically uses --unreleased for nightly/latest and --current for versioned tags.
+        type: string
+        default: ""
+      attestation:
+        description: "Generate build provenance attestation for release artifacts"
+        type: boolean
+        default: true
+      prerelease:
+        description: >
+          Mark the release as a prerelease. When not explicitly set, nightly and latest releases are automatically marked as prereleases.
+        type: boolean
+        default: false
+      delete-existing:
+        description: >
+          Delete an existing release with the same tag before creating a new one. Useful for rolling releases (nightly, latest).
+        type: boolean
+        default: false
+      draft:
+        description: "Create the release as a draft"
+        type: boolean
+        default: false
+      archive-prefix:
+        description: >
+          Prefix for archive filenames. Defaults to the binary-name input. Archives are named: <prefix>-<version>-<target>.<ext>
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  attestations: write
+  id-token: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff@${{ inputs.git-cliff-version }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ inputs.artifact-pattern }}
+          path: artifacts
+
+      - name: Generate changelog
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          EXTRA_ARGS="${{ inputs.git-cliff-args }}"
+          if [[ "$VERSION" == "nightly" || "$VERSION" == "latest" ]]; then
+            git cliff --unreleased $EXTRA_ARGS -o CHANGELOG.md
+          else
+            git cliff --current $EXTRA_ARGS -o CHANGELOG.md
+          fi
+
+      - name: Package artifacts
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          BINARY="${{ inputs.binary-name }}"
+          PREFIX="${{ inputs.archive-prefix }}"
+          PREFIX="${PREFIX:-$BINARY}"
+
+          mkdir -p release
+
+          for dir in artifacts/${BINARY}-*/; do
+            [ -d "$dir" ] || continue
+            target=$(basename "$dir" | sed "s/${BINARY}-//")
+
+            if [[ "$target" == *windows* ]]; then
+              zip "release/${PREFIX}-${VERSION}-${target}.zip" "${dir}${BINARY}.exe"
+            else
+              chmod +x "${dir}${BINARY}"
+              tar -czf "release/${PREFIX}-${VERSION}-${target}.tar.gz" -C "$dir" "$BINARY"
+            fi
+          done
+
+          cd release
+          for file in *.tar.gz *.zip; do
+            [ -f "$file" ] || continue
+            sha512sum "$file" > "$file.sha512"
+          done
+
+      - name: Attest build provenance
+        if: ${{ inputs.attestation }}
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: 'release/*'
+
+      - name: Delete existing release
+        if: ${{ inputs.delete-existing }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete "${{ inputs.version }}" --yes --cleanup-tag || true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          ARGS=()
+          ARGS+=(--title "$VERSION")
+          ARGS+=(--notes-file CHANGELOG.md)
+
+          if [[ "${{ inputs.draft }}" == "true" ]]; then
+            ARGS+=(--draft)
+          fi
+
+          if [[ "${{ inputs.prerelease }}" == "true" ]]; then
+            ARGS+=(--prerelease)
+          elif [[ "$VERSION" == "nightly" || "$VERSION" == "latest" ]]; then
+            ARGS+=(--prerelease)
+          fi
+
+          gh release create "$VERSION" "${ARGS[@]}" release/*

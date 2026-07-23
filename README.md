@@ -176,6 +176,52 @@ When a formatter makes changes to your code, the pre-commit hook fails, requirin
 - `allowed-unicode-chars`: Comma-separated Unicode characters permitted in files checked by `no-unicode-extensions` (e.g. `"µ,§"`).
   Empty by default.
 
+### Using the Release Workflow
+
+The `release.yml` workflow packages build artifacts into platform archives, generates a changelog with git-cliff, creates SHA-512 checksums, optionally attests build provenance, and publishes a GitHub Release.
+
+```yaml
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    # Your build matrix that uploads artifacts named like:
+    #   my-app-x86_64-unknown-linux-gnu
+    #   my-app-aarch64-unknown-linux-gnu
+    #   my-app-x86_64-pc-windows-msvc
+    # Each artifact contains the binary (e.g. "my-app" or "my-app.exe").
+    ...
+
+  release:
+    needs: build
+    uses: eclipse-opensovd/cicd-workflows/.github/workflows/release.yml@main
+    with:
+      version: ${{ github.ref_name }}
+      artifact-pattern: "my-app-*"
+      binary-name: "my-app"
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+```
+
+#### Available Inputs
+
+- `version` (required): Release version string (e.g. `v1.2.3`, `nightly`, `latest`). Used for archive names and the GitHub Release title.
+- `artifact-pattern` (required): Pattern for `actions/download-artifact` to match build artifacts (e.g. `my-app-*`).
+- `binary-name` (required): Base name of the binary inside each artifact directory, without extension. Windows artifacts are expected to have a `.exe` suffix.
+- `git-cliff-version` (optional): Version of git-cliff to install. Defaults to `2.11.0`.
+- `git-cliff-args` (optional): Extra arguments for git-cliff (e.g. `--config cliff.toml`). The workflow automatically uses `--unreleased` for nightly/latest and `--current` for versioned tags.
+- `attestation` (optional): Generate build provenance attestation for release artifacts. Defaults to `true`.
+- `prerelease` (optional): Mark the release as a prerelease. Nightly and latest releases are automatically marked as prereleases. Defaults to `false`.
+- `delete-existing` (optional): Delete an existing release with the same tag before creating a new one. Useful for rolling releases. Defaults to `false`.
+- `draft` (optional): Create the release as a draft. Defaults to `false`.
+- `archive-prefix` (optional): Prefix for archive filenames. Defaults to the `binary-name` input.
+
 ## Running Checks Locally
 
 Run all pre-commit hooks on your repository using [prek](https://github.com/j178/prek):
