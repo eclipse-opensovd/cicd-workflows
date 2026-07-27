@@ -29,7 +29,7 @@ jobs:
           issue-message: |
             Welcome, and thanks for opening your first issue!
 
-            Please make sure you've reviewed our [contribution guidelines](https://github.com/eclipse-opensovd/opensovd/blob/main/CONTRIBUTING.md)
+            Please make sure you've reviewed our [contribution guidelines](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/main/CONTRIBUTING.md)
             and that your issue includes enough context for maintainers to understand the problem.
 
             The team will get back to you as soon as possible.
