@@ -22,11 +22,11 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install Rust nightly toolchain (required for rustfmt check)
+    - name: Install Rust nightly toolchain (required for nightly checks)
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         toolchain: nightly
-        components: rustfmt
+        components: rustfmt, clippy
         cache-shared-key: ci-nightly
     - name: Install Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
