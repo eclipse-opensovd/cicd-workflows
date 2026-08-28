@@ -38,8 +38,7 @@ def main() -> None:
     parser.add_argument("--toolchain", default=None)
     args, remaining = parser.parse_known_args()
 
-    cargo = "cargo"
-    cmd = [cargo]
+    cmd = ["cargo"]
     if args.toolchain:
         cmd.append(f"+{args.toolchain}")
     cmd.append("fmt")

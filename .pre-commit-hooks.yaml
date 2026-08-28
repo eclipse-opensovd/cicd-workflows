@@ -69,5 +69,4 @@
     - --all-features
     - --locked
     - --
-    - -D
-    - warnings
+    - --deny=warnings

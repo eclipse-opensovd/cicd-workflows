@@ -19,7 +19,8 @@ inputs:
   extra-args:
     description: 'Additional arguments passed to cargo clippy (e.g. "--all-features" or "--all-features --all-targets")'
     required: false
-    default: '--all-features --all-targets --D warnings'
+    default: '--all-features --all-targets --locked -- --deny=warnings'
+
 runs:
   using: 'composite'
   steps:
@@ -33,13 +34,16 @@ runs:
 
     - name: Format check (rustfmt)
       id: fmt
+      # Set to 'true' to present all errors to user at once, 'false' fails immediately.
       continue-on-error: true
       shell: bash
       run: cargo +${{ inputs.toolchain }} fmt --check
 
     - name: Clippy
       id: clippy
+      # Set to 'true' to present all errors to user at once, 'false' fails immediately.
       continue-on-error: true
+
       shell: bash
       run: cargo +${{ inputs.toolchain }} clippy --locked ${{ inputs.extra-args }}
 
