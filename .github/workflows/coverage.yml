@@ -39,16 +39,14 @@ on:
         type: string
         default: ""
       post-pr-comment:
-        description: >-
-          Generate a coverage PR comment and upload it as the 'pr-comment-coverage' artifact. For non-fork PRs the comment is also posted directly (requires pull-requests: write in the caller). Fork PRs can be handled by a workflow_run workflow that calls post-pr-comments.yml.
+        description: "Post or update a sticky coverage comment on the PR (requires pull-requests: write permission in the caller)"
         type: boolean
         default: false
 
 permissions:
   contents: read
   # pull-requests: write is required when post-pr-comment input is true.
-  # The caller workflow must grant this permission explicitly.
-  pull-requests: write
+# The caller workflow must grant this permission explicitly.
 
 jobs:
   coverage:
@@ -134,45 +132,22 @@ jobs:
           fi
           echo "Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"
 
-      - name: Generate coverage comment body
-        if: ${{ inputs.post-pr-comment && github.event_name == 'pull_request' }}
-        shell: bash
-        run: |
-          mkdir -p pr-comment-coverage
-          echo "${{ github.event.number }}" > pr-comment-coverage/pr_number
-          MARKER='<!-- coverage-report -->'
-          TOTAL='${{ steps.coverage.outputs.total_coverage }}'
-          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          SYMBOL="$(printf '\xf0\x9f\x93\x8a')"
-          printf '%s\n' \
-            "${MARKER}" \
-            "### ${SYMBOL} Coverage Report" \
-            '' \
-            "**Total line coverage: ${TOTAL}%**" \
-            '' \
-            "[Full build artifacts](${RUN_URL})" \
-            > pr-comment-coverage/body.md
-
-      - name: Upload coverage comment artifact
-        if: ${{ inputs.post-pr-comment && github.event_name == 'pull_request' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-comment-coverage
-          path: pr-comment-coverage/
-
-      # Post directly for non-fork PRs (instant feedback).
-      # Fork PRs lack write permissions and cannot directly post comments.
-      # they can be handled by a separate workflow_run workflow that calls
-      # post-pr-comments.yml.
       - name: Post coverage comment on PR
-        if: >-
-          inputs.post-pr-comment && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v9
+        if: ${{ inputs.post-pr-comment && github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            const body = fs.readFileSync('pr-comment-coverage/body.md', 'utf8');
             const marker = '<!-- coverage-report -->';
+            const total = '${{ steps.coverage.outputs.total_coverage }}';
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const body = [
+              marker,
+              '### \uD83D\uDCCA Coverage Report',
+              '',
+              `**Total line coverage: ${total}%**`,
+              '',
+              `[Full build artifacts](${runUrl})`,
+            ].join('\n');
 
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,

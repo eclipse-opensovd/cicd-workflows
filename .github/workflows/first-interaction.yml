@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2026 Copyright (c) Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: First Interaction
+
+on:
+  pull_request_target:
+    types: [opened]
+  issues:
+    types: [opened]
+
+jobs:
+  first-interaction:
+    runs-on: ubuntu-26.04
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            Welcome, and thanks for opening your first issue!
+
+            Please make sure you've reviewed our [contribution guidelines](https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/main/CONTRIBUTING.md)
+            and that your issue includes enough context for maintainers to understand the problem.
+
+            The team will get back to you as soon as possible.
+          pr-message: |
+            Thanks for your first pull request!
+
+            A few things to keep in mind:
+            - Make sure CI checks pass before requesting a review.
+            - Eclipse projects require a **DCO sign-off** on every commit:
+              use `git commit -s` or add `Signed-off-by: Your Name <email>` manually.
+            - See [CONTRIBUTING.md](https://github.com/eclipse-opensovd/opensovd/blob/main/CONTRIBUTING.md) for details.
+
+            A maintainer will review your PR shortly. Welcome to the project!
