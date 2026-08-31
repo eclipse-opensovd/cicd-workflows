@@ -86,33 +86,29 @@ jobs:
 
 #### Rust Lint And Format Action
 
+Runs `cargo fmt --check` and clippy. Findings are written to the step summary
+and emitted as GitHub Actions annotations. The job fails if either check reports
+issues.
+
 ```yaml
-
-# Make sure to copy this into you CI pipeline too, otherwise review comments cannot be posted.
-permissions:
-  contents: read
-  pull-requests: write # Grants permission to post review comments
-
 jobs:
-  format_and_clippy_nightly_toolchain_pinned:
-    concurrency:
-      group: format_and_clippy_nightly_toolchain_pinned-${{ github.ref }}
+  lint:
     runs-on: ubuntu-26.04
-    continue-on-error: false
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - name: Format and clippy
+        uses: eclipse-opensovd/cicd-workflows/rust-lint-and-format-action@main
         with:
-          submodules: false
-      - name: Format and Clippy
-        uses: eclipse-opensovd/cicd-workflows/.github/workflows/checks.yml@main
-        with:
-          toolchain: nightly-2025-07-14
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          fail-on-format-error: 'true'
-          fail-on-clippy-error: 'true'
-          clippy-deny-warnings: 'true'
+          toolchain: nightly-2025-07-14   # optional, defaults to "stable"
+          extra-args: '--all-features'    # optional, defaults to "--all-features"
 ```
+
+**Inputs:**
+
+- `toolchain`: Rust toolchain to use (e.g. `"nightly"` or `"nightly-2025-07-14"`).
+  When empty (the default), the toolchain from the project's `rust-toolchain.toml`
+  or the pre-installed active toolchain is used.
+- `extra-args`: Additional arguments passed to `cargo clippy` (default: `"--all-features"`).
 
 ## Actions in This Repository
 
@@ -203,3 +199,18 @@ uv run prek run --all-files
 #### Rust Toolchain (Required for Rust Projects)
 
 [Install Rust](https://www.rust-lang.org/tools/install) - Required if your project has a `Cargo.toml` file.
+
+### Running nightly clippy locally
+
+The pre-commit `clippy` hook uses the stable toolchain by default. To opt in to
+nightly clippy locally for a single run, set `RUSTUP_TOOLCHAIN`:
+
+```bash
+RUSTUP_TOOLCHAIN=nightly prek run clippy
+```
+
+Or for all hooks:
+
+```bash
+RUSTUP_TOOLCHAIN=nightly prek run --all-files
+```
